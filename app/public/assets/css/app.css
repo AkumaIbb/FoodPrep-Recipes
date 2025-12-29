@@ -1,0 +1,241 @@
+:root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --accent: #38bdf8;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.topbar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    position: sticky;
+    top: 0;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(226, 232, 240, 0.05);
+    z-index: 10;
+}
+
+.filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pill {
+    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.pill.active,
+.pill:hover {
+    border-color: var(--accent);
+    color: #0b1628;
+    background: var(--accent);
+}
+
+.search {
+    justify-self: center;
+    width: 100%;
+    max-width: 400px;
+}
+
+.search input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+}
+
+.menu {
+    justify-self: end;
+    position: relative;
+}
+
+#burger {
+    padding: 10px 12px;
+    font-size: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.menu-drawer {
+    position: absolute;
+    right: 0;
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 12px;
+    padding: 8px 0;
+    min-width: 160px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+
+.menu-drawer a {
+    display: block;
+    padding: 10px 14px;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.menu-drawer a:hover {
+    background: rgba(56, 189, 248, 0.08);
+}
+
+.hidden { display: none; }
+
+main {
+    padding: 16px;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 14px;
+    padding: 14px;
+    cursor: pointer;
+    transition: transform 0.1s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+}
+
+.card-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.meta {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.flags {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.fifo {
+    color: var(--text);
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.loading, .error, .empty {
+    text-align: center;
+    padding: 30px;
+    color: var(--muted);
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+}
+
+.modal-content {
+    background: var(--card);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 16px;
+    padding: 18px;
+    max-width: 520px;
+    width: 92%;
+    position: relative;
+}
+
+.close {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 22px;
+    cursor: pointer;
+}
+
+h2 { margin: 0 0 6px; }
+h3 { margin: 14px 0 8px; }
+
+.item-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.item-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.item-list .sub {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+button.danger {
+    display: inline-block;
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    margin: 6px 0 12px;
+}
+
+button.danger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .topbar {
+        grid-template-columns: 1fr;
+    }
+
+    .search {
+        justify-self: stretch;
+        order: 3;
+    }
+
+    .menu {
+        justify-self: start;
+    }
+}
