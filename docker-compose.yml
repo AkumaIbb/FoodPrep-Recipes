@@ -28,7 +28,6 @@ services:
   mysql:
     image: mysql:8.4
     container_name: freezer_mysql
-    command: --default-authentication-plugin=mysql_native_password
     environment:
       MYSQL_DATABASE: ${DB_NAME:-freezer_inventory}
       MYSQL_USER: ${DB_USER:-freezer}
