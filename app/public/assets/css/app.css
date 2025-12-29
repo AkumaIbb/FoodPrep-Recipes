@@ -275,6 +275,24 @@ body {
     filter: brightness(1.05);
 }
 
+.primary-btn {
+    background: var(--accent);
+    border: none;
+    color: #0b1628;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.secondary-btn {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    padding: 8px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
 .checkbox {
     flex-direction: row;
     align-items: center;
@@ -350,6 +368,62 @@ button.danger {
 button.danger:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.error-banner {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fecdd3;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin: 8px 0;
+}
+
+.toast {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: #22c55e;
+    color: #0b1628;
+    padding: 12px 16px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 30;
+}
+
+.toast.show {
+    opacity: 1;
+}
+
+.recipes-page h1 {
+    margin: 10px 16px 0;
+}
+
+.recipes-filters label {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.kcal-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
 }
 
 @media (max-width: 768px) {

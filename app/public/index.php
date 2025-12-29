@@ -9,6 +9,8 @@ use App\ContainerTypeRepository;
 use App\Db;
 use App\InventoryRepository;
 use App\MealSetRepository;
+use App\RecipeRepository;
+use App\Http\Api\RecipeController;
 
 $pdo = Db::pdo();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -70,6 +72,12 @@ function handleApi(string $method, string $path, PDO $pdo): void
     $inventoryRepo = new InventoryRepository($pdo);
     $containerTypeRepo = new ContainerTypeRepository($pdo);
     $containerRepo = new ContainerRepository($pdo);
+    $recipeRepo = new RecipeRepository($pdo);
+    $recipeController = new RecipeController($recipeRepo);
+
+    if ($recipeController->handle($method, $path)) {
+        return;
+    }
 
     if ($method === 'GET' && $path === '/api/meal_sets') {
         $filters = collectFilters($_GET ?? []);
@@ -235,7 +243,13 @@ function renderPage(string $path): void
     header('Content-Type: text/html; charset=utf-8');
 
     $normalized = rtrim($path, '/') ?: '/';
-    $page = in_array($normalized, ['/containers', '/boxen', '/box-inventar'], true) ? 'containers' : 'inventory';
+    if ($normalized === '/recipes') {
+        $page = 'recipes';
+    } elseif (in_array($normalized, ['/containers', '/boxen', '/box-inventar'], true)) {
+        $page = 'containers';
+    } else {
+        $page = 'inventory';
+    }
     ?>
 <!doctype html>
 <html lang="de">
@@ -253,6 +267,7 @@ function renderPage(string $path): void
             <div id="menu-drawer" class="menu-drawer hidden">
                 <a href="/">Inventar</a>
                 <a href="/containers">Box-Inventar</a>
+                <a href="/recipes">Rezepte</a>
             </div>
         </div>
     </header>
@@ -278,6 +293,128 @@ function renderPage(string $path): void
             <div id="modal-body"></div>
         </div>
     </div>
+    <?php elseif ($page === 'recipes'): ?>
+    <main class="recipes-page">
+        <h1>Rezepte</h1>
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2>Suche &amp; Filter</h2>
+                    <p class="sub">Rezepte nach Typ und Ernährungsform durchsuchen</p>
+                </div>
+                <div class="panel-actions">
+                    <button id="new-recipe-btn" class="primary-btn">Neues Rezept</button>
+                </div>
+            </div>
+            <div class="filters recipes-filters">
+                <div class="search">
+                    <input id="recipe-search" type="search" placeholder="Suche nach Name, Zutaten, Tags" />
+                </div>
+                <label>Type
+                    <select id="recipe-type-filter">
+                        <option value="">Alle</option>
+                        <option value="MEAL">Meal</option>
+                        <option value="PROTEIN">Protein</option>
+                        <option value="SAUCE">Sauce</option>
+                        <option value="SIDE">Beilage</option>
+                        <option value="BASE">Base</option>
+                        <option value="BREAKFAST">Frühstück</option>
+                        <option value="DESSERT">Dessert</option>
+                        <option value="MISC">Misc</option>
+                    </select>
+                </label>
+                <label>Sortierung
+                    <select id="recipe-sort">
+                        <option value="name">Name</option>
+                        <option value="updated">Letzte Änderung</option>
+                    </select>
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" id="recipe-veggie-filter" /> Veggie
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" id="recipe-vegan-filter" /> Vegan
+                </label>
+            </div>
+            <div id="recipe-error" class="error-banner hidden"></div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Typ</th>
+                            <th>Flags</th>
+                            <th>Portionen</th>
+                            <th>kcal/Portion</th>
+                            <th>Aktualisiert</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recipes-body">
+                        <tr class="empty-row"><td colspan="6">Keine Rezepte vorhanden.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div id="recipe-modal" class="modal hidden" role="dialog" aria-modal="true">
+            <div class="modal-content">
+                <button id="recipe-modal-close" class="close">×</button>
+                <h2 id="recipe-modal-title">Neues Rezept</h2>
+                <div id="recipe-modal-error" class="error-banner hidden"></div>
+                <form id="recipe-form" class="form-grid">
+                    <label class="wide">Name
+                        <input type="text" name="name" required maxlength="200" />
+                    </label>
+                    <label>Typ
+                        <select name="recipe_type">
+                            <option value="MEAL">Meal</option>
+                            <option value="PROTEIN">Protein</option>
+                            <option value="SAUCE">Sauce</option>
+                            <option value="SIDE">Beilage</option>
+                            <option value="BASE">Base</option>
+                            <option value="BREAKFAST">Frühstück</option>
+                            <option value="DESSERT">Dessert</option>
+                            <option value="MISC">Misc</option>
+                        </select>
+                    </label>
+                    <label>Portionen
+                        <input type="number" name="yield_portions" min="1" />
+                    </label>
+                    <label>Kcal/Portion
+                        <div class="kcal-row">
+                            <input type="number" name="kcal_per_portion" min="0" />
+                            <button type="button" id="kcal-estimate" class="secondary-btn">ChatGPT schätzen</button>
+                        </div>
+                    </label>
+                    <label>Haltbarkeit (Tage)
+                        <input type="number" name="default_best_before_days" min="0" />
+                    </label>
+                    <label>Tags (Komma-separiert)
+                        <input type="text" name="tags_text" maxlength="200" />
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="is_veggie" /> Veggie
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="is_vegan" /> Vegan
+                    </label>
+                    <label class="wide">Zutaten
+                        <textarea name="ingredients_text" rows="4" placeholder="500 g Kartoffeln, mehligkochend&#10;1 Ei&#10;Salz, Pfeffer, Muskat&#10;1 EL Sonnenblumenöl"></textarea>
+                    </label>
+                    <label class="wide">Zubereitung
+                        <textarea name="prep_text" rows="4"></textarea>
+                    </label>
+                    <label class="wide">Auftauen &amp; Aufwärmen
+                        <textarea name="reheat_text" rows="3"></textarea>
+                    </label>
+                    <div class="form-actions wide">
+                        <button type="submit" class="primary-btn">Speichern</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
     <?php else: ?>
     <main class="container-page">
         <h1>Box-Inventar</h1>
