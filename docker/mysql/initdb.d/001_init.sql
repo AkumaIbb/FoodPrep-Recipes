@@ -27,12 +27,23 @@ CREATE TABLE IF NOT EXISTS recipes (
 -- =========================================================
 CREATE TABLE IF NOT EXISTS container_types (
   id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  shape ENUM('RECT','SQUARE','ROUND') NOT NULL,
+  shape ENUM('RECT','ROUND','OVAL') NOT NULL,
   volume_ml SMALLINT UNSIGNED NOT NULL,
+  height_mm SMALLINT UNSIGNED NULL,
+  width_mm SMALLINT UNSIGNED NULL,
+  length_mm SMALLINT UNSIGNED NULL,
+  material ENUM('PLASTIC','GLASS') NULL,
   note VARCHAR(100) NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_container_types (shape, volume_ml)
 ) ENGINE=InnoDB;
+
+-- Für bestehende Datenbanken bei Bedarf:
+-- ALTER TABLE container_types MODIFY shape ENUM('RECT','ROUND','OVAL') NOT NULL;
+-- ALTER TABLE container_types ADD COLUMN height_mm SMALLINT UNSIGNED NULL AFTER volume_ml;
+-- ALTER TABLE container_types ADD COLUMN width_mm SMALLINT UNSIGNED NULL AFTER height_mm;
+-- ALTER TABLE container_types ADD COLUMN length_mm SMALLINT UNSIGNED NULL AFTER width_mm;
+-- ALTER TABLE container_types ADD COLUMN material ENUM('PLASTIC','GLASS') NULL AFTER length_mm;
 
 CREATE TABLE IF NOT EXISTS containers (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -112,6 +123,7 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   status ENUM('IN_FREEZER','TAKEN_OUT','EATEN','DISCARDED') NOT NULL DEFAULT 'IN_FREEZER',
   status_changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+  storage_type ENUM('BOX','FREE','FREEZER_BAG','VACUUM_BAG') NOT NULL DEFAULT 'BOX',
   container_id BIGINT UNSIGNED NULL,
 
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -132,6 +144,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     FOREIGN KEY (container_id) REFERENCES containers(id)
     ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- Für bestehende Datenbanken: ALTER TABLE inventory_items ADD COLUMN storage_type ENUM('BOX','FREE','FREEZER_BAG','VACUUM_BAG') NOT NULL DEFAULT 'BOX' AFTER status_changed_at;
 
 -- =========================================================
 -- 5) Meal-Sets

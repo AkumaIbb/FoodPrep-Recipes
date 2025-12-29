@@ -1,3 +1,5 @@
+const page = document.body.dataset.page || 'inventory';
+
 const state = {
     view: 'meals',
     veggie: false,
@@ -5,11 +7,22 @@ const state = {
     q: '',
 };
 
+const containerState = {
+    active: '1',
+    types: [],
+};
+
 document.addEventListener('DOMContentLoaded', () => {
-    bindFilters();
     bindMenu();
-    bindModal();
-    loadData();
+    if (page === 'inventory') {
+        bindFilters();
+        bindModal();
+        loadData();
+    } else {
+        bindContainerForms();
+        loadContainerTypes();
+        loadContainers();
+    }
 });
 
 function bindFilters() {
@@ -238,4 +251,235 @@ function openItemModal(item) {
             alert('Entnahme fehlgeschlagen');
         }
     });
+}
+
+// ----------------------
+// Container management
+// ----------------------
+
+function bindContainerForms() {
+    const filter = document.getElementById('container-filter-active');
+    if (filter) {
+        filter.value = containerState.active;
+        filter.addEventListener('change', () => {
+            containerState.active = filter.value;
+            loadContainers();
+        });
+    }
+
+    const typeForm = document.getElementById('container-type-form');
+    if (typeForm) {
+        typeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(typeForm);
+            const payload = buildContainerTypePayload(formData);
+            try {
+                await postJson('/api/container-types', payload);
+                typeForm.reset();
+                await loadContainerTypes();
+                await loadContainers();
+            } catch (err) {
+                alert('Typ konnte nicht gespeichert werden.');
+                console.error(err);
+            }
+        });
+    }
+
+    const containerForm = document.getElementById('container-form');
+    if (containerForm) {
+        containerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(containerForm);
+            const payload = buildContainerPayload(formData);
+            try {
+                await postJson('/api/containers', payload);
+                containerForm.reset();
+                await loadContainers();
+            } catch (err) {
+                alert('Container konnte nicht angelegt werden.');
+                console.error(err);
+            }
+        });
+    }
+}
+
+function buildContainerTypePayload(formData) {
+    const payload = {
+        shape: formData.get('shape'),
+        volume_ml: toInt(formData.get('volume_ml')),
+        height_mm: toInt(formData.get('height_mm')),
+        width_mm: toInt(formData.get('width_mm')),
+        length_mm: toInt(formData.get('length_mm')),
+        material: formData.get('material') || null,
+        note: formData.get('note') || null,
+    };
+    if (!payload.height_mm) delete payload.height_mm;
+    if (!payload.width_mm) delete payload.width_mm;
+    if (!payload.length_mm) delete payload.length_mm;
+    if (!payload.material) delete payload.material;
+    if (!payload.note) delete payload.note;
+    return payload;
+}
+
+function buildContainerPayload(formData) {
+    const typeId = toInt(formData.get('container_type_id'));
+    const payload = {
+        container_code: (formData.get('container_code') || '').trim(),
+        container_type_id: typeId || null,
+        note: (formData.get('note') || '').trim() || null,
+        is_active: formData.get('is_active') ? 1 : 0,
+    };
+    if (!payload.container_type_id) delete payload.container_type_id;
+    if (!payload.note) delete payload.note;
+    return payload;
+}
+
+async function loadContainerTypes() {
+    const tbody = document.getElementById('container-types-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">Lade...</td></tr>';
+    try {
+        const items = await fetchContainerTypes();
+        containerState.types = items;
+        renderContainerTypes(items);
+        populateContainerTypeSelect(items);
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="error">Fehler beim Laden.</td></tr>';
+        console.error(err);
+    }
+}
+
+function renderContainerTypes(items) {
+    const tbody = document.getElementById('container-types-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!items.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Keine Typen erfasst.</td></tr>';
+        return;
+    }
+
+    items.forEach((item) => {
+        const tr = document.createElement('tr');
+        const dims = [item.length_mm, item.width_mm, item.height_mm].filter(Boolean).join(' × ');
+        tr.innerHTML = `
+            <td>${item.shape}</td>
+            <td>${item.volume_ml}</td>
+            <td>${dims || '-'}</td>
+            <td>${item.material || '-'}</td>
+            <td>${item.note || ''}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function populateContainerTypeSelect(items) {
+    const select = document.getElementById('container-type-select');
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">-- optional --</option>';
+    items.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = `${item.shape} · ${item.volume_ml} ml`;
+        if (String(item.id) === current) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+}
+
+async function loadContainers() {
+    const tbody = document.getElementById('containers-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Lade...</td></tr>';
+    try {
+        const items = await fetchContainers(containerState.active);
+        renderContainers(items);
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="error">Fehler beim Laden.</td></tr>';
+        console.error(err);
+    }
+}
+
+function renderContainers(items) {
+    const tbody = document.getElementById('containers-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!items.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Keine Container angelegt.</td></tr>';
+        return;
+    }
+
+    items.forEach((item) => {
+        const tr = document.createElement('tr');
+        const typeLabel = item.container_type_id ? `${item.shape || '-'} · ${item.volume_ml || '?'} ml` : '-';
+        const status = item.is_active ? 'Aktiv' : 'Inaktiv';
+        const buttonLabel = item.is_active ? 'Deaktivieren' : 'Reaktivieren';
+        tr.innerHTML = `
+            <td>${item.container_code}</td>
+            <td>${typeLabel}</td>
+            <td>${item.volume_ml || '-'}</td>
+            <td>${item.material || '-'}</td>
+            <td>${status}</td>
+            <td>${item.note || ''}</td>
+            <td><button data-action="toggle" data-id="${item.id}" data-active="${item.is_active ? 1 : 0}">${buttonLabel}</button></td>
+        `;
+        const btn = tr.querySelector('button[data-action="toggle"]');
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                await updateContainer(item.id, { is_active: item.is_active ? 0 : 1 });
+                await loadContainers();
+            } catch (err) {
+                alert('Status konnte nicht geändert werden.');
+                console.error(err);
+                btn.disabled = false;
+            }
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+async function fetchContainerTypes() {
+    const res = await fetch('/api/container-types');
+    if (!res.ok) throw new Error('load_failed');
+    const json = await res.json();
+    return json.items || [];
+}
+
+async function fetchContainers(active) {
+    const res = await fetch(`/api/containers?active=${encodeURIComponent(active)}`);
+    if (!res.ok) throw new Error('load_failed');
+    const json = await res.json();
+    return json.items || [];
+}
+
+async function postJson(url, payload) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+        throw new Error(json.error || 'request_failed');
+    }
+    return json;
+}
+
+async function updateContainer(id, payload) {
+    const res = await fetch(`/api/containers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) {
+        throw new Error(json.error || 'request_failed');
+    }
+}
+
+function toInt(value) {
+    const num = parseInt(value, 10);
+    return Number.isNaN(num) ? null : num;
 }

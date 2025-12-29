@@ -8,6 +8,8 @@ use RuntimeException;
 
 final class InventoryRepository
 {
+    private const STORAGE_TYPES = ['BOX', 'FREE', 'FREEZER_BAG', 'VACUUM_BAG'];
+
     public function __construct(private PDO $pdo)
     {
     }
@@ -43,7 +45,7 @@ final class InventoryRepository
         $where = implode(' AND ', $conditions);
 
         $sql = "SELECT ii.id, ii.id_code, ii.name, ii.item_type, ii.is_veggie, ii.is_vegan, ii.frozen_at, ii.best_before_at,
-                itd.best_before_days, c.container_code, {$computedDateExpr} AS computed_best_before
+                ii.storage_type, itd.best_before_days, c.container_code, {$computedDateExpr} AS computed_best_before
             FROM inventory_items ii
             JOIN item_type_defaults itd ON itd.item_type = ii.item_type
             LEFT JOIN containers c ON c.id = ii.container_id
@@ -75,6 +77,15 @@ final class InventoryRepository
         }
 
         $itemType = (string)$data['item_type'];
+        $storageType = strtoupper((string)($data['storage_type'] ?? 'BOX'));
+        if (!in_array($storageType, self::STORAGE_TYPES, true)) {
+            throw new RuntimeException('invalid_storage_type');
+        }
+
+        $containerId = $this->optionalInt($data['container_id'] ?? null);
+        if ($storageType !== 'BOX') {
+            $containerId = null;
+        }
         $this->pdo->beginTransaction();
         try {
             if (empty($data['id_code'])) {
@@ -85,10 +96,10 @@ final class InventoryRepository
 
             $stmt = $this->pdo->prepare("INSERT INTO inventory_items (
                 id_code, item_type, name, recipe_id, is_veggie, is_vegan, portion_text, weight_g, volume_ml, kcal,
-                frozen_at, best_before_at, storage_location, prep_notes, thaw_method, reheat_minutes, status, container_id
+                frozen_at, best_before_at, storage_location, prep_notes, thaw_method, reheat_minutes, status, storage_type, container_id
             ) VALUES (
                 :id_code, :item_type, :name, :recipe_id, :is_veggie, :is_vegan, :portion_text, :weight_g, :volume_ml, :kcal,
-                :frozen_at, :best_before_at, :storage_location, :prep_notes, :thaw_method, :reheat_minutes, 'IN_FREEZER', :container_id
+                :frozen_at, :best_before_at, :storage_location, :prep_notes, :thaw_method, :reheat_minutes, 'IN_FREEZER', :storage_type, :container_id
             )");
 
             $stmt->execute([
@@ -108,7 +119,8 @@ final class InventoryRepository
                 'prep_notes' => $data['prep_notes'] ?? null,
                 'thaw_method' => $data['thaw_method'] ?? $defaults['thaw_method'],
                 'reheat_minutes' => $data['reheat_minutes'] ?? $defaults['reheat_minutes'],
-                'container_id' => $data['container_id'] ?? null,
+                'storage_type' => $storageType,
+                'container_id' => $containerId,
             ]);
 
             $itemId = (int)$this->pdo->lastInsertId();
@@ -191,6 +203,15 @@ final class InventoryRepository
             $this->pdo->rollBack();
             throw new RuntimeException('takeout_failed: ' . $e->getMessage(), 0, $e);
         }
+    }
+
+    private function optionalInt(null|int|string $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int)$value;
     }
 
     private function generateIdCode(string $itemType): string
