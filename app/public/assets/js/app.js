@@ -12,12 +12,24 @@ const containerState = {
     types: [],
 };
 
+const recipeState = {
+    search: '',
+    type: '',
+    veggie: false,
+    vegan: false,
+    sort: 'name',
+    list: [],
+    editingId: null,
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     bindMenu();
     if (page === 'inventory') {
         bindFilters();
         bindModal();
         loadData();
+    } else if (page === 'recipes') {
+        bindRecipePage();
     } else {
         bindContainerForms();
         loadContainerTypes();
@@ -251,6 +263,275 @@ function openItemModal(item) {
             alert('Entnahme fehlgeschlagen');
         }
     });
+}
+
+// ----------------------
+// Recipes
+// ----------------------
+
+function bindRecipePage() {
+    const search = document.getElementById('recipe-search');
+    const type = document.getElementById('recipe-type-filter');
+    const veggie = document.getElementById('recipe-veggie-filter');
+    const vegan = document.getElementById('recipe-vegan-filter');
+    const sort = document.getElementById('recipe-sort');
+    const newBtn = document.getElementById('new-recipe-btn');
+    const modal = document.getElementById('recipe-modal');
+    const modalClose = document.getElementById('recipe-modal-close');
+    const form = document.getElementById('recipe-form');
+    const kcalButton = document.getElementById('kcal-estimate');
+
+    if (search) {
+        search.addEventListener('input', () => {
+            recipeState.search = search.value;
+            debounceRecipeLoad();
+        });
+    }
+
+    if (type) {
+        type.addEventListener('change', () => {
+            recipeState.type = type.value;
+            loadRecipes();
+        });
+    }
+
+    if (veggie) {
+        veggie.addEventListener('change', () => {
+            recipeState.veggie = veggie.checked;
+            loadRecipes();
+        });
+    }
+
+    if (vegan) {
+        vegan.addEventListener('change', () => {
+            recipeState.vegan = vegan.checked;
+            loadRecipes();
+        });
+    }
+
+    if (sort) {
+        sort.addEventListener('change', () => {
+            recipeState.sort = sort.value;
+            loadRecipes();
+        });
+    }
+
+    if (newBtn) {
+        newBtn.addEventListener('click', () => openRecipeModal());
+    }
+
+    if (modal && modalClose) {
+        modalClose.addEventListener('click', closeRecipeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeRecipeModal();
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveRecipe();
+        });
+    }
+
+    if (kcalButton) {
+        kcalButton.addEventListener('click', () => {
+            alert('kommt später');
+        });
+    }
+
+    loadRecipes();
+}
+
+let recipeDebounce;
+function debounceRecipeLoad() {
+    clearTimeout(recipeDebounce);
+    recipeDebounce = setTimeout(loadRecipes, 200);
+}
+
+async function loadRecipes() {
+    const tbody = document.getElementById('recipes-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">Lade...</td></tr>';
+    setRecipeError('');
+
+    try {
+        const params = new URLSearchParams();
+        params.append('limit', '50');
+        params.append('offset', '0');
+        params.append('sort', recipeState.sort);
+        if (recipeState.search) params.append('search', recipeState.search);
+        if (recipeState.type) params.append('type', recipeState.type);
+        if (recipeState.veggie) params.append('veggie', '1');
+        if (recipeState.vegan) params.append('vegan', '1');
+
+        const res = await fetch('/api/recipes?' + params.toString());
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error?.code || 'load_failed');
+        recipeState.list = json.data || [];
+        renderRecipes(recipeState.list);
+    } catch (err) {
+        console.error(err);
+        setRecipeError('Rezepte konnten nicht geladen werden.');
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Fehler beim Laden.</td></tr>';
+    }
+}
+
+function renderRecipes(items) {
+    const tbody = document.getElementById('recipes-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (!items.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Keine Rezepte vorhanden.</td></tr>';
+        return;
+    }
+
+    items.forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHtml(item.name)}</td>
+            <td><span class="badge">${item.recipe_type}</span></td>
+            <td>${renderRecipeFlags(item)}</td>
+            <td>${item.yield_portions ?? '-'}</td>
+            <td>${item.kcal_per_portion ?? '-'}</td>
+            <td>${formatDate(item.updated_at || item.created_at)}</td>
+        `;
+        tr.addEventListener('click', () => openRecipeModal(item));
+        tbody.appendChild(tr);
+    });
+}
+
+function renderRecipeFlags(item) {
+    const flags = [];
+    if (item.is_vegan) flags.push('🌱 vegan');
+    else if (item.is_veggie) flags.push('🥕 veggie');
+    return flags.join(' ');
+}
+
+function openRecipeModal(item = null) {
+    recipeState.editingId = item?.id || null;
+    const modal = document.getElementById('recipe-modal');
+    const title = document.getElementById('recipe-modal-title');
+    const form = document.getElementById('recipe-form');
+    setRecipeError('', true);
+
+    if (!modal || !form || !title) return;
+
+    form.reset();
+    if (item) {
+        title.textContent = 'Rezept bearbeiten';
+        fillRecipeForm(form, item);
+    } else {
+        title.textContent = 'Neues Rezept';
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function fillRecipeForm(form, item) {
+    form.elements['name'].value = item.name || '';
+    form.elements['recipe_type'].value = item.recipe_type || 'MEAL';
+    form.elements['yield_portions'].value = item.yield_portions ?? '';
+    form.elements['kcal_per_portion'].value = item.kcal_per_portion ?? '';
+    form.elements['default_best_before_days'].value = item.default_best_before_days ?? '';
+    form.elements['tags_text'].value = item.tags_text || '';
+    form.elements['ingredients_text'].value = item.ingredients_text || '';
+    form.elements['prep_text'].value = item.prep_text || '';
+    form.elements['reheat_text'].value = item.reheat_text || '';
+    form.elements['is_veggie'].checked = !!item.is_veggie;
+    form.elements['is_vegan'].checked = !!item.is_vegan;
+}
+
+function closeRecipeModal() {
+    const modal = document.getElementById('recipe-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    recipeState.editingId = null;
+}
+
+async function saveRecipe() {
+    const form = document.getElementById('recipe-form');
+    if (!form) return;
+
+    const payload = buildRecipePayload(new FormData(form));
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    setRecipeError('', true);
+
+    const method = recipeState.editingId ? 'PATCH' : 'POST';
+    const url = recipeState.editingId ? `/api/recipes/${recipeState.editingId}` : '/api/recipes';
+
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error?.message || 'save_failed');
+
+        closeRecipeModal();
+        showToast('Gespeichert');
+        await loadRecipes();
+    } catch (err) {
+        console.error(err);
+        setRecipeError('Speichern fehlgeschlagen.', true);
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
+function buildRecipePayload(formData) {
+    return {
+        name: (formData.get('name') || '').toString().trim(),
+        recipe_type: formData.get('recipe_type') || 'MEAL',
+        yield_portions: toInt(formData.get('yield_portions')),
+        kcal_per_portion: toInt(formData.get('kcal_per_portion')),
+        default_best_before_days: toInt(formData.get('default_best_before_days')),
+        tags_text: (formData.get('tags_text') || '').toString().trim() || null,
+        ingredients_text: (formData.get('ingredients_text') || '').toString().trim() || null,
+        prep_text: (formData.get('prep_text') || '').toString().trim() || null,
+        reheat_text: (formData.get('reheat_text') || '').toString().trim() || null,
+        is_veggie: formData.get('is_veggie') ? 1 : 0,
+        is_vegan: formData.get('is_vegan') ? 1 : 0,
+    };
+}
+
+function setRecipeError(message, inModal = false) {
+    const targetId = inModal ? 'recipe-modal-error' : 'recipe-error';
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    if (!message) {
+        el.classList.add('hidden');
+        el.textContent = '';
+    } else {
+        el.classList.remove('hidden');
+        el.textContent = message;
+    }
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    toast.classList.add('show');
+    setTimeout(() => {
+        toast.classList.remove('show');
+        toast.classList.add('hidden');
+    }, 2000);
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    return dateString.substring(0, 10);
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 // ----------------------

@@ -14,13 +14,24 @@ SET FOREIGN_KEY_CHECKS = 0;
 CREATE TABLE IF NOT EXISTS recipes (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   name VARCHAR(200) NOT NULL,
+  recipe_type ENUM('MEAL','PROTEIN','SAUCE','SIDE','BASE','BREAKFAST','DESSERT','MISC') NOT NULL DEFAULT 'MEAL',
+  ingredients_text MEDIUMTEXT NULL,
+  prep_text MEDIUMTEXT NULL,
+  reheat_text MEDIUMTEXT NULL,
+  yield_portions SMALLINT UNSIGNED NULL,
+  kcal_per_portion SMALLINT UNSIGNED NULL,
+  is_veggie TINYINT(1) NOT NULL DEFAULT 0,
+  is_vegan  TINYINT(1) NOT NULL DEFAULT 0,
+  tags_text VARCHAR(200) NULL,
   description TEXT NULL,
   instructions MEDIUMTEXT NULL,
   default_best_before_days SMALLINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_recipes_name (name)
+  UNIQUE KEY uq_recipes_name (name),
+  KEY idx_recipes_type (recipe_type),
+  KEY idx_recipes_flags (is_veggie, is_vegan)
 ) ENGINE=InnoDB;
 
 -- =========================================================
