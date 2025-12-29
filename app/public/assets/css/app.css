@@ -109,7 +109,7 @@ body {
     background: rgba(56, 189, 248, 0.08);
 }
 
-.hidden { display: none; }
+.hidden { display: none !important; }
 
 .card-grid {
     display: grid;
