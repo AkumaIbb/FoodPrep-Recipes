@@ -425,11 +425,12 @@ final class SetRepository
                 $usedContainers[$containerId] = true;
             }
 
-            $componentIds = array_values(array_unique(array_map('intval', $componentIds)));
-            foreach ($componentIds as $cid) {
-                if (!isset($componentMap[$cid])) {
-                    throw new RuntimeException('invalid_component');
-                }
+            $componentIds = array_values(array_filter(
+                array_unique(array_map('intval', $componentIds)),
+                static fn(int $cid): bool => isset($componentMap[$cid])
+            ));
+            if (empty($componentIds)) {
+                throw new RuntimeException('invalid_component');
             }
 
             if ($portionFactor === '' || $portionFactor === null) {
