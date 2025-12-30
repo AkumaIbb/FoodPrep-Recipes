@@ -233,7 +233,7 @@ final class SetRepository
 
                 $inventoryRepo->createItem([
                     'item_type' => $this->prefixForType($box['box_type']),
-                    'name' => $set['name'] . ' ' . $boxCode,
+                    'name' => $set['name'],
                     'frozen_at' => (new DateTimeImmutable())->format('Y-m-d'),
                     'portion_text' => $box['portion_text'],
                     'kcal' => $kcalTotal,
