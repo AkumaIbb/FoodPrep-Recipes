@@ -1160,6 +1160,10 @@ async function loadFreeContainers() {
         const select = document.getElementById('box-container');
         if (select) {
             select.innerHTML = '';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Container wählen';
+            select.appendChild(placeholder);
             (json.items || []).forEach((c) => {
                 const opt = document.createElement('option');
                 opt.value = c.id;
@@ -1172,6 +1176,12 @@ async function loadFreeContainers() {
     } catch (e) {
         // ignore
     }
+}
+
+function isBagContainerId(value) {
+    if (value === null || value === undefined) return false;
+    const normalized = String(value).toUpperCase();
+    return ['FREEZER_BAG', 'VACUUM_BAG', '-1', '-2'].includes(normalized);
 }
 
 function renderComponentChecklist() {
@@ -1201,7 +1211,10 @@ function addBoxFromForm() {
         return;
     }
 
-    if (setState.builder.boxes.some((b) => String(b.container_id) === String(containerId))) {
+    const isBag = isBagContainerId(containerId);
+    const parsedContainerId = isBag ? null : parseInt(containerId, 10);
+
+    if (!isBag && setState.builder.boxes.some((b) => String(b.container_id) === String(parsedContainerId))) {
         showSetModalError('Container ist bereits zugewiesen.');
         return;
     }
@@ -1211,8 +1224,12 @@ function addBoxFromForm() {
         return;
     }
 
+    const selectedOption = form.querySelector('#box-container option:checked');
+    const containerLabel = selectedOption ? selectedOption.textContent : String(containerId);
+
     setState.builder.boxes.push({
-        container_id: parseInt(containerId, 10),
+        container_id: isBag ? null : parsedContainerId,
+        container_label: containerLabel,
         box_type: boxType,
         portion_factor: portionFactor || null,
         portion_text: portionText || null,
@@ -1236,7 +1253,7 @@ function renderBoxesTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${box.box_type}</td>
-            <td>${box.container_id}</td>
+            <td>${box.container_label || box.container_id || '-'}</td>
             <td>${box.portion_factor || '-'} / ${box.portion_text || '-'}</td>
             <td>${box.component_ids.length}</td>
             <td><button type="button" class="link" data-index="${idx}">Entfernen</button></td>
