@@ -50,7 +50,7 @@ final class RecipeRepository
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
-        $sql = "SELECT id, name, recipe_type, ingredients_text, prep_text, reheat_text, yield_portions, kcal_per_portion, is_veggie, is_vegan, tags_text, description, instructions, default_best_before_days, created_at, updated_at
+        $sql = "SELECT id, name, recipe_type, ingredients_text, prep_text, reheat_text, yield_portions, kcal_per_portion, is_veggie, is_vegan, tags_text, description, instructions, default_best_before_days, rating_ease, rating_fresh, rating_thawed, created_at, updated_at
                 FROM recipes {$where}
                 ORDER BY {$orderBy}
                 LIMIT :limit OFFSET :offset";
@@ -77,7 +77,7 @@ final class RecipeRepository
         $payload = $this->normalizePayload($data);
 
         try {
-            $stmt = $this->pdo->prepare('INSERT INTO recipes (name, recipe_type, ingredients_text, prep_text, reheat_text, yield_portions, kcal_per_portion, is_veggie, is_vegan, tags_text, description, instructions, default_best_before_days) VALUES (:name, :recipe_type, :ingredients_text, :prep_text, :reheat_text, :yield_portions, :kcal_per_portion, :is_veggie, :is_vegan, :tags_text, :description, :instructions, :default_best_before_days)');
+            $stmt = $this->pdo->prepare('INSERT INTO recipes (name, recipe_type, ingredients_text, prep_text, reheat_text, yield_portions, kcal_per_portion, is_veggie, is_vegan, tags_text, description, instructions, default_best_before_days, rating_ease, rating_fresh, rating_thawed) VALUES (:name, :recipe_type, :ingredients_text, :prep_text, :reheat_text, :yield_portions, :kcal_per_portion, :is_veggie, :is_vegan, :tags_text, :description, :instructions, :default_best_before_days, :rating_ease, :rating_fresh, :rating_thawed)');
             $stmt->execute([
                 'name' => $name,
                 'recipe_type' => $payload['recipe_type'],
@@ -92,6 +92,9 @@ final class RecipeRepository
                 'description' => $payload['description'],
                 'instructions' => $payload['instructions'],
                 'default_best_before_days' => $payload['default_best_before_days'],
+                'rating_ease' => $payload['rating_ease'],
+                'rating_fresh' => $payload['rating_fresh'],
+                'rating_thawed' => $payload['rating_thawed'],
             ]);
             return (int)$this->pdo->lastInsertId();
         } catch (PDOException $e) {
@@ -188,6 +191,12 @@ final class RecipeRepository
             $payload[$field] = $this->optionalInt($data[$field] ?? null);
         }
 
+        $ratingFields = ['rating_ease', 'rating_fresh', 'rating_thawed'];
+        foreach ($ratingFields as $field) {
+            if ($partial && !array_key_exists($field, $data)) continue;
+            $payload[$field] = $this->normalizeRating($data[$field] ?? null);
+        }
+
         if (!$partial || array_key_exists('is_veggie', $data)) {
             $payload['is_veggie'] = $this->normalizeBool($data['is_veggie'] ?? 0);
         }
@@ -223,6 +232,17 @@ final class RecipeRepository
             return null;
         }
         return (int)$value;
+    }
+
+    private function normalizeRating(null|int|string $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $int = (int)$value;
+        if ($int < 1) return 1;
+        if ($int > 5) return 5;
+        return $int;
     }
 
     private function normalizeBool(mixed $value): int

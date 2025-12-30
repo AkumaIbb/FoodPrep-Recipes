@@ -606,6 +606,23 @@ function renderPage(string $path, string $locale): void
                     <label data-i18n="recipes.best_before">Haltbarkeit (Tage)
                         <input type="number" name="default_best_before_days" min="0" />
                     </label>
+                    <div class="wide rating-section">
+                        <div class="rating-header">
+                            <span data-i18n="recipes.ratings.title">Bewertungen</span>
+                            <span class="muted" data-i18n="recipes.ratings.help">1-5 Sterne pro Kategorie</span>
+                        </div>
+                        <div class="rating-grid">
+                            <label data-i18n="recipes.ratings.ease">Ease
+                                <input type="number" name="rating_ease" min="1" max="5" />
+                            </label>
+                            <label data-i18n="recipes.ratings.fresh">Fresh
+                                <input type="number" name="rating_fresh" min="1" max="5" />
+                            </label>
+                            <label data-i18n="recipes.ratings.thawed">Thawed
+                                <input type="number" name="rating_thawed" min="1" max="5" />
+                            </label>
+                        </div>
+                    </div>
                     <label data-i18n="recipes.tags">Tags (Komma-separiert)
                         <input type="text" name="tags_text" maxlength="200" />
                     </label>
