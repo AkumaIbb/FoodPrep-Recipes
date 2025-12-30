@@ -599,9 +599,6 @@ function fillRecipeForm(form, item) {
     form.elements['yield_portions'].value = item.yield_portions ?? '';
     form.elements['kcal_per_portion'].value = item.kcal_per_portion ?? '';
     form.elements['default_best_before_days'].value = item.default_best_before_days ?? '';
-    form.elements['rating_ease'].value = item.rating_ease ?? '';
-    form.elements['rating_fresh'].value = item.rating_fresh ?? '';
-    form.elements['rating_thawed'].value = item.rating_thawed ?? '';
     form.elements['tags_text'].value = item.tags_text || '';
     form.elements['ingredients_text'].value = item.ingredients_text || '';
     form.elements['prep_text'].value = item.prep_text || '';
@@ -657,9 +654,6 @@ function buildRecipePayload(formData) {
         yield_portions: toInt(formData.get('yield_portions')),
         kcal_per_portion: toInt(formData.get('kcal_per_portion')),
         default_best_before_days: toInt(formData.get('default_best_before_days')),
-        rating_ease: normalizeRating(formData.get('rating_ease')),
-        rating_fresh: normalizeRating(formData.get('rating_fresh')),
-        rating_thawed: normalizeRating(formData.get('rating_thawed')),
         tags_text: (formData.get('tags_text') || '').toString().trim() || null,
         ingredients_text: (formData.get('ingredients_text') || '').toString().trim() || null,
         prep_text: (formData.get('prep_text') || '').toString().trim() || null,
@@ -1119,14 +1113,6 @@ async function updateContainer(id, payload) {
 function toInt(value) {
     const num = parseInt(value, 10);
     return Number.isNaN(num) ? null : num;
-}
-
-function normalizeRating(value) {
-    const num = toInt(value);
-    if (num === null) return null;
-    if (num < 1) return 1;
-    if (num > 5) return 5;
-    return num;
 }
 
 // Sets / Wizard
