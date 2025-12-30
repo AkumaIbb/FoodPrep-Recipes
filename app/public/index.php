@@ -361,7 +361,7 @@ function renderPage(string $path): void
                 <button id="recipe-modal-close" class="close">×</button>
                 <h2 id="recipe-modal-title">Neues Rezept</h2>
                 <div id="recipe-modal-error" class="error-banner hidden"></div>
-                <form id="recipe-form" class="form-grid">
+                <form id="recipe-form" class="form-grid recipe-form-grid">
                     <label class="wide">Name
                         <input type="text" name="name" required maxlength="200" />
                     </label>
@@ -380,25 +380,27 @@ function renderPage(string $path): void
                     <label>Portionen
                         <input type="number" name="yield_portions" min="1" />
                     </label>
-                    <label>Kcal/Portion
-                        <div class="kcal-row">
-                            <input type="number" name="kcal_per_portion" min="0" />
-                            <button type="button" id="kcal-estimate" class="secondary-btn">ChatGPT schätzen</button>
-                        </div>
-                    </label>
+		    <label>Kcal/Portion
+		      <input type="number" name="kcal_per_portion" min="0" />
+		    </label>
+		    <div class="gpt-row">
+		      <button type="button" id="kcal-estimate" class="secondary-btn">Kalorien mit ChatGPT schätzen</button>
+		    </div>
                     <label>Haltbarkeit (Tage)
                         <input type="number" name="default_best_before_days" min="0" />
                     </label>
                     <label>Tags (Komma-separiert)
                         <input type="text" name="tags_text" maxlength="200" />
                     </label>
-                    <label class="checkbox">
-                        <input type="checkbox" name="is_veggie" /> Veggie
-                    </label>
-                    <label class="checkbox">
-                        <input type="checkbox" name="is_vegan" /> Vegan
-                    </label>
-                    <label class="wide">Zutaten
+		    <div class="check-row wide">
+		        <label class="checkbox">
+		           <input type="checkbox" name="is_veggie" /> Veggie
+			</label>
+    			<label class="checkbox">
+        		   <input type="checkbox" name="is_vegan" /> Vegan
+    			</label>
+		    </div>
+		    <label class="wide">Zutaten
                         <textarea name="ingredients_text" rows="4" placeholder="500 g Kartoffeln, mehligkochend&#10;1 Ei&#10;Salz, Pfeffer, Muskat&#10;1 EL Sonnenblumenöl"></textarea>
                     </label>
                     <label class="wide">Zubereitung
