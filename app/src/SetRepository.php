@@ -246,7 +246,7 @@ final class SetRepository
                     'portion_text' => $box['portion_text'],
                     'kcal' => $kcalTotal,
                     'container_id' => $box['container_id'],
-                    'storage_type' => 'BOX',
+                    'storage_type' => $box['storage_type'],
                 ]);
 
                 $created[] = [
@@ -450,6 +450,7 @@ final class SetRepository
                 'portion_text' => $portionText,
                 'component_ids' => $componentIds,
                 'is_bag' => $isBag,
+                'storage_type' => $this->storageTypeForContainer($rawContainer, $isBag),
             ];
         }
 
@@ -498,6 +499,20 @@ final class SetRepository
         }
         $normalized = strtoupper((string)$value);
         return in_array($normalized, ['FREEZER_BAG', 'VACUUM_BAG', '-1', '-2'], true);
+    }
+
+    private function storageTypeForContainer(mixed $value, bool $isBag): string
+    {
+        if (!$isBag) {
+            return 'BOX';
+        }
+
+        $normalized = strtoupper((string)$value);
+        if (in_array($normalized, ['VACUUM_BAG', '-2'], true)) {
+            return 'VACUUM_BAG';
+        }
+
+        return 'FREEZER_BAG';
     }
 
     /**
