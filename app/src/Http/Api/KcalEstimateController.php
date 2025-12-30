@@ -153,7 +153,7 @@ final class KcalEstimateController
     private function checkRateLimit(): array
     {
         $dir = $this->rateLimitDir();
-        if (!is_dir($dir) && !mkdir($dir, 0777, true) && !is_dir($dir)) {
+        if ($dir === '') {
             return ['limited' => false, 'retry_after' => 0];
         }
 
@@ -200,18 +200,33 @@ final class KcalEstimateController
     private function rateLimitDir(): string
     {
         $root = dirname(__DIR__, 3);
-        $tmpDir = $root . '/tmp';
-        if (is_dir($tmpDir)) {
-            return $tmpDir . '/ratelimit';
+        $candidates = [
+            $root . '/tmp/ratelimit',
+            $root . '/var/ratelimit',
+            rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/kcal_estimate',
+        ];
+
+        foreach ($candidates as $dir) {
+            if ($this->ensureWritableDir($dir)) {
+                return $dir;
+            }
         }
 
-        $varDir = $root . '/var/ratelimit';
-        if ($varDir) {
-            return $varDir;
+        return '';
+    }
+
+    private function ensureWritableDir(string $dir): bool
+    {
+        if (is_dir($dir)) {
+            return is_writable($dir);
         }
 
-        $sysTmp = sys_get_temp_dir();
-        return rtrim($sysTmp, DIRECTORY_SEPARATOR) . '/kcal_estimate';
+        $parent = dirname($dir);
+        if (!is_dir($parent) && !@mkdir($parent, 0777, true) && !is_dir($parent)) {
+            return false;
+        }
+
+        return (@mkdir($dir, 0777, true) || is_dir($dir)) && is_writable($dir);
     }
 
     private function clientIp(): string
