@@ -50,13 +50,6 @@ CREATE TABLE IF NOT EXISTS container_types (
   UNIQUE KEY uq_container_types (shape, volume_ml)
 ) ENGINE=InnoDB;
 
--- Für bestehende Datenbanken bei Bedarf:
--- ALTER TABLE container_types MODIFY shape ENUM('RECT','ROUND','OVAL') NOT NULL;
--- ALTER TABLE container_types ADD COLUMN height_mm SMALLINT UNSIGNED NULL AFTER volume_ml;
--- ALTER TABLE container_types ADD COLUMN width_mm SMALLINT UNSIGNED NULL AFTER height_mm;
--- ALTER TABLE container_types ADD COLUMN length_mm SMALLINT UNSIGNED NULL AFTER width_mm;
--- ALTER TABLE container_types ADD COLUMN material ENUM('PLASTIC','GLASS') NULL AFTER length_mm;
-
 CREATE TABLE IF NOT EXISTS containers (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   container_code VARCHAR(32) NOT NULL,
@@ -158,58 +151,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Für bestehende Datenbanken: ALTER TABLE inventory_items ADD COLUMN storage_type ENUM('BOX','FREE','FREEZER_BAG','VACUUM_BAG') NOT NULL DEFAULT 'BOX' AFTER status_changed_at;
-
 -- =========================================================
--- 5) Meal-Sets
--- =========================================================
-CREATE TABLE IF NOT EXISTS meal_sets (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  set_code VARCHAR(16) NOT NULL,
-  name VARCHAR(200) NOT NULL,
-  description TEXT NULL,
-  recipe_id BIGINT UNSIGNED NULL,
-  is_active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_meal_sets_code (set_code),
-  KEY idx_meal_sets_recipe (recipe_id),
-  CONSTRAINT fk_meal_sets_recipe
-    FOREIGN KEY (recipe_id) REFERENCES recipes(id)
-    ON DELETE SET NULL
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS meal_set_requirements (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  meal_set_id BIGINT UNSIGNED NOT NULL,
-  required_type ENUM('M','P','S','B','Z','F','D','X') NOT NULL,
-  required_count SMALLINT UNSIGNED NOT NULL DEFAULT 1,
-  require_veggie TINYINT(1) NOT NULL DEFAULT 0,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_meal_set_req (meal_set_id, required_type, require_veggie),
-  CONSTRAINT fk_meal_set_req_set
-    FOREIGN KEY (meal_set_id) REFERENCES meal_sets(id)
-    ON DELETE CASCADE
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS meal_set_items (
-  meal_set_id BIGINT UNSIGNED NOT NULL,
-  inventory_item_id BIGINT UNSIGNED NOT NULL,
-  role_type ENUM('M','P','S','B','Z','F','D','X') NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (meal_set_id, inventory_item_id),
-  KEY idx_meal_set_items_item (inventory_item_id),
-  CONSTRAINT fk_meal_set_items_set
-    FOREIGN KEY (meal_set_id) REFERENCES meal_sets(id)
-    ON DELETE CASCADE,
-  CONSTRAINT fk_meal_set_items_item
-    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id)
-    ON DELETE CASCADE
-) ENGINE=InnoDB;
-
--- =========================================================
--- 6) Ratings
+-- 5) Ratings
 -- =========================================================
 CREATE TABLE IF NOT EXISTS ratings (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -227,7 +170,7 @@ CREATE TABLE IF NOT EXISTS ratings (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 7) Events
+-- 6) Events
 -- =========================================================
 CREATE TABLE IF NOT EXISTS inventory_events (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -245,7 +188,7 @@ CREATE TABLE IF NOT EXISTS inventory_events (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 8) ID-Counter
+-- 7) ID-Counter
 -- =========================================================
 CREATE TABLE IF NOT EXISTS id_counters (
   item_type ENUM('M','P','S','B','Z','F','D','X') NOT NULL,
@@ -259,7 +202,7 @@ INSERT INTO id_counters (item_type, next_number) VALUES
 ON DUPLICATE KEY UPDATE next_number = next_number;
 
 -- =========================================================
--- 9) Sets + Boxen (Meal-Prep-Builder)
+-- 8) Sets + Boxen (Meal-Prep-Builder)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS sets (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -281,7 +224,8 @@ CREATE TABLE IF NOT EXISTS set_components (
   kcal_total INT NULL,
   sort_order INT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_set_components_set FOREIGN KEY (set_id) REFERENCES sets(id) ON DELETE CASCADE
+  CONSTRAINT fk_set_components_set FOREIGN KEY (set_id) REFERENCES sets(id) ON DELETE CASCADE,
+  CONSTRAINT fk_set_components_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS set_boxes (

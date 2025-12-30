@@ -48,7 +48,7 @@ final class RecipeController
         if ($limit < 1) $limit = 1;
         if ($limit > 200) $limit = 200;
         $offset = max(0, (int)($_GET['offset'] ?? 0));
-        $sort = $_GET['sort'] === 'updated' ? 'updated' : 'name';
+        $sort = ($_GET['sort'] ?? '') === 'updated' ? 'updated' : 'name';
 
         $result = $this->recipes->search($filters, $limit, $offset, $sort);
         $this->json(['ok' => true, 'data' => $result['data'], 'total' => $result['total']], 200);

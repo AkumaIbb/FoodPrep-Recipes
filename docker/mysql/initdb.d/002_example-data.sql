@@ -1,5 +1,5 @@
 -- =========================================================
--- Freezer Inventory – Example / Seed Data
+-- Freezer Inventory – Example / Seed Data (NEW MODEL)
 -- =========================================================
 
 SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -17,147 +17,208 @@ ON DUPLICATE KEY UPDATE
   material  = VALUES(material),
   note      = VALUES(note);
 
-INSERT INTO containers (container_code, container_type_id, is_active, note)
+INSERT INTO containers (container_code, container_type_id, is_active, in_use, note)
 SELECT
   'BOX-01' AS container_code,
   ct.id    AS container_type_id,
   1        AS is_active,
+  0        AS in_use,
   'Demo-Box' AS note
 FROM container_types ct
 WHERE ct.shape='RECT' AND ct.volume_ml=1000
 ON DUPLICATE KEY UPDATE
   container_type_id = VALUES(container_type_id),
   is_active         = VALUES(is_active),
+  in_use            = VALUES(in_use),
   note              = VALUES(note);
 
 -- -----------------------------
--- 2) Demo Rezept
+-- 2) Demo Rezepte (mit kcal_per_portion!)
 -- -----------------------------
-INSERT INTO recipes (name, description, instructions, default_best_before_days)
-VALUES ('Demo: Rouladen-Set', 'Seed-Daten für UI (kannst du löschen).', 'Nur Demo – keine echte Anleitung.', 90)
+INSERT INTO recipes (name, recipe_type, kcal_per_portion, default_best_before_days, description, instructions)
+VALUES
+  ('Rouladen', 'PROTEIN', 700, 60, 'Seed-Daten für UI', 'Demo'),
+  ('Apfelrotkohl', 'SIDE', 200, 60, 'Seed-Daten für UI', 'Demo'),
+  ('Rouladensoße', 'SAUCE', 120, 90, 'Seed-Daten für UI', 'Demo')
 ON DUPLICATE KEY UPDATE
+  recipe_type = VALUES(recipe_type),
+  kcal_per_portion = VALUES(kcal_per_portion),
+  default_best_before_days = VALUES(default_best_before_days),
   description = VALUES(description),
-  instructions = VALUES(instructions),
-  default_best_before_days = VALUES(default_best_before_days);
+  instructions = VALUES(instructions);
 
 -- -----------------------------
--- 3) Demo Meal-Set (Bundle)
+-- 3) Demo Set + Komponenten (NEUES MODEL)
 -- -----------------------------
-INSERT INTO meal_sets (set_code, name, description, recipe_id, is_active)
+INSERT INTO sets (name, note)
+VALUES ('Rinderrouladen mit Apfelrotkohl und Kartoffeln', 'Demo-Set für Wizard / Packen')
+ON DUPLICATE KEY UPDATE
+  note = VALUES(note);
+
+-- Komponenten: Protein=Rouladen, Side=Apfelrotkohl, Side=Kartoffeln (FREE)
+-- kcal_total als Snapshot (bei Rezepten übernehmen wir kcal_per_portion)
+INSERT INTO set_components (set_id, component_type, source_type, recipe_id, free_text, amount_text, kcal_total, sort_order)
 SELECT
-  'DEMO-SET' AS set_code,
-  'Rouladen-Set (Demo)' AS name,
-  'Beispiel: Protein + Beilage + Soße' AS description,
-  r.id AS recipe_id,
-  1 AS is_active
-FROM recipes r
-WHERE r.name = 'Demo: Rouladen-Set'
+  s.id,
+  'PROTEIN',
+  'RECIPE',
+  r.id,
+  NULL,
+  '1',
+  r.kcal_per_portion,
+  0
+FROM sets s
+JOIN recipes r ON r.name='Rouladen'
+WHERE s.name='Rinderrouladen mit Apfelrotkohl und Kartoffeln'
 ON DUPLICATE KEY UPDATE
-  name        = VALUES(name),
-  description = VALUES(description),
-  recipe_id   = VALUES(recipe_id),
-  is_active   = VALUES(is_active);
+  amount_text = VALUES(amount_text),
+  kcal_total  = VALUES(kcal_total),
+  sort_order  = VALUES(sort_order);
 
--- Requirements: 1x P, 1x B, 1x S
-INSERT INTO meal_set_requirements (meal_set_id, required_type, required_count, require_veggie)
-SELECT ms.id, 'P', 1, 0
-FROM meal_sets ms
-WHERE ms.set_code='DEMO-SET'
-ON DUPLICATE KEY UPDATE required_count = VALUES(required_count);
+INSERT INTO set_components (set_id, component_type, source_type, recipe_id, free_text, amount_text, kcal_total, sort_order)
+SELECT
+  s.id,
+  'SIDE',
+  'RECIPE',
+  r.id,
+  NULL,
+  '1',
+  r.kcal_per_portion,
+  1
+FROM sets s
+JOIN recipes r ON r.name='Apfelrotkohl'
+WHERE s.name='Rinderrouladen mit Apfelrotkohl und Kartoffeln'
+ON DUPLICATE KEY UPDATE
+  amount_text = VALUES(amount_text),
+  kcal_total  = VALUES(kcal_total),
+  sort_order  = VALUES(sort_order);
 
-INSERT INTO meal_set_requirements (meal_set_id, required_type, required_count, require_veggie)
-SELECT ms.id, 'B', 1, 0
-FROM meal_sets ms
-WHERE ms.set_code='DEMO-SET'
-ON DUPLICATE KEY UPDATE required_count = VALUES(required_count);
-
-INSERT INTO meal_set_requirements (meal_set_id, required_type, required_count, require_veggie)
-SELECT ms.id, 'S', 1, 0
-FROM meal_sets ms
-WHERE ms.set_code='DEMO-SET'
-ON DUPLICATE KEY UPDATE required_count = VALUES(required_count);
+INSERT INTO set_components (set_id, component_type, source_type, recipe_id, free_text, amount_text, kcal_total, sort_order)
+SELECT
+  s.id,
+  'SIDE',
+  'FREE',
+  NULL,
+  'Kartoffeln',
+  '300 g',
+  150,
+  2
+FROM sets s
+WHERE s.name='Rinderrouladen mit Apfelrotkohl und Kartoffeln'
+ON DUPLICATE KEY UPDATE
+  amount_text = VALUES(amount_text),
+  kcal_total  = VALUES(kcal_total),
+  sort_order  = VALUES(sort_order);
 
 -- -----------------------------
--- 4) Demo Inventory Items
+-- 4) Optional: bereits "gepackte" Box (eine echte BOX) + Inventory Booking
+--    -> damit du sofort im Inventar siehst: P001 in BOX-01 und Container in_use=1
 -- -----------------------------
--- P000 in BOX-01 (storage_type=BOX + container_id gesetzt)
+-- Box P001 (PROTEIN) in BOX-01, portion_factor=1, kcal_total = 700
+INSERT INTO set_boxes (set_id, container_id, box_code, box_type, portion_factor, portion_text, kcal_total)
+SELECT
+  s.id,
+  c.id,
+  'P001',
+  'PROTEIN',
+  1.00,
+  '1 Portion',
+  700
+FROM sets s
+JOIN containers c ON c.container_code='BOX-01'
+WHERE s.name='Rinderrouladen mit Apfelrotkohl und Kartoffeln'
+ON DUPLICATE KEY UPDATE
+  portion_factor = VALUES(portion_factor),
+  portion_text   = VALUES(portion_text),
+  kcal_total     = VALUES(kcal_total);
+
+-- Zuordnung Box -> Komponente (PROTEIN/Rouladen)
+INSERT INTO set_box_components (set_box_id, set_component_id)
+SELECT
+  sb.id,
+  sc.id
+FROM sets s
+JOIN set_boxes sb ON sb.set_id = s.id AND sb.box_code='P001'
+JOIN set_components sc ON sc.set_id = s.id AND sc.component_type='PROTEIN' AND sc.source_type='RECIPE'
+WHERE s.name='Rinderrouladen mit Apfelrotkohl und Kartoffeln'
+ON DUPLICATE KEY UPDATE
+  set_component_id = VALUES(set_component_id);
+
+-- Inventory Item (P001) buchen + Container belegen
 INSERT INTO inventory_items
   (id_code, item_type, name, recipe_id, is_veggie, is_vegan,
-   portion_text, weight_g, kcal,
-   frozen_at, best_before_at,
+   portion_text, kcal, frozen_at, best_before_at,
    prep_notes, thaw_method, reheat_minutes,
    status, storage_type, container_id)
 SELECT
-  'P000', 'P', 'Roulade (Demo)', r.id, 0, 0,
-  '1 Stück', 180, 420,
-  (CURDATE() - INTERVAL 14 DAY), NULL,
-  'Pfanne/Ofen, 8–10 min', 'PAN', 10,
-  'IN_FREEZER', 'BOX', c.id
+  'P001',
+  'P',
+  'Roulade (Demo)',
+  r.id,
+  0,
+  0,
+  '1 Portion',
+  700,
+  CURDATE(),
+  NULL,
+  'Demo',
+  'PAN',
+  8,
+  'IN_FREEZER',
+  'BOX',
+  c.id
 FROM recipes r
 JOIN containers c ON c.container_code='BOX-01'
-WHERE r.name='Demo: Rouladen-Set'
+WHERE r.name='Rouladen'
 ON DUPLICATE KEY UPDATE
-  name = VALUES(name);
+  name = VALUES(name),
+  kcal = VALUES(kcal),
+  container_id = VALUES(container_id),
+  storage_type = VALUES(storage_type),
+  status = VALUES(status);
 
--- B000 frei (ohne Container)
+UPDATE containers
+SET in_use = 1
+WHERE container_code='BOX-01';
+
+-- -----------------------------
+-- 5) Zusätzlich: ein komplettes Meal als Einzelelement (M001) zum Testen der "Meals"-Ansicht
+-- -----------------------------
 INSERT INTO inventory_items
   (id_code, item_type, name, recipe_id, is_veggie, is_vegan,
-   portion_text, weight_g, kcal,
-   frozen_at, best_before_at,
+   portion_text, kcal, frozen_at, best_before_at,
    prep_notes, thaw_method, reheat_minutes,
    status, storage_type, container_id)
 SELECT
-  'B000', 'B', 'Rotkohl (Demo)', r.id, 1, 1,
-  '1 Portion', 200, 160,
-  (CURDATE() - INTERVAL 10 DAY), NULL,
-  'Mikro 3–4 min', 'MICROWAVE', 4,
-  'IN_FREEZER', 'FREE', NULL
-FROM recipes r
-WHERE r.name='Demo: Rouladen-Set'
+  'M001',
+  'M',
+  'Rouladen mit Rotkohl (Demo)',
+  NULL,
+  0,
+  0,
+  '1 Portion',
+  900,
+  CURDATE(),
+  NULL,
+  'Demo',
+  'MICROWAVE',
+  8,
+  'IN_FREEZER',
+  'FREE',
+  NULL
 ON DUPLICATE KEY UPDATE
-  name = VALUES(name);
-
--- S000 in FREEZER_BAG (storage_type=FREEZER_BAG + container_id NULL)
-INSERT INTO inventory_items
-  (id_code, item_type, name, recipe_id, is_veggie, is_vegan,
-   portion_text, volume_ml, kcal,
-   frozen_at, best_before_at,
-   prep_notes, thaw_method, reheat_minutes,
-   status, storage_type, container_id)
-SELECT
-  'S000', 'S', 'Rouladensoße (Demo)', r.id, 0, 0,
-  '1 Portion', 80, 120,
-  (CURDATE() - INTERVAL 7 DAY), NULL,
-  'Sanft erwärmen', 'MICROWAVE', 2,
-  'IN_FREEZER', 'FREEZER_BAG', NULL
-FROM recipes r
-WHERE r.name='Demo: Rouladen-Set'
-ON DUPLICATE KEY UPDATE
-  name = VALUES(name);
+  name = VALUES(name),
+  kcal = VALUES(kcal),
+  status = VALUES(status);
 
 -- -----------------------------
--- 5) Zuordnung Items -> Meal-Set
--- role_type = item_type
--- -----------------------------
-INSERT INTO meal_set_items (meal_set_id, inventory_item_id, role_type)
-SELECT
-  ms.id AS meal_set_id,
-  ii.id AS inventory_item_id,
-  ii.item_type AS role_type
-FROM meal_sets ms
-JOIN inventory_items ii ON ii.id_code IN ('P000','B000','S000')
-WHERE ms.set_code='DEMO-SET'
-ON DUPLICATE KEY UPDATE
-  role_type = VALUES(role_type);
-
--- -----------------------------
--- 6) Optional: Rating für P000
+-- 6) Optional: Rating für P001
 -- -----------------------------
 INSERT INTO ratings (inventory_item_id, ease_stars, fresh_stars, thawed_stars, notes)
 SELECT
   ii.id, 3, 4, 4, 'Demo-Rating'
 FROM inventory_items ii
-WHERE ii.id_code='P000'
+WHERE ii.id_code='P001'
 ON DUPLICATE KEY UPDATE
   ease_stars   = VALUES(ease_stars),
   fresh_stars  = VALUES(fresh_stars),
