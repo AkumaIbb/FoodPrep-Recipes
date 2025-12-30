@@ -120,13 +120,8 @@ async function loadData() {
     grid.innerHTML = '<div class="loading">Lade...</div>';
 
     try {
-        if (state.view === 'meals') {
-            const meals = await fetchMealSets();
-            renderMealCards(meals);
-        } else {
-            const items = await fetchInventory();
-            renderItemCards(items);
-        }
+        const items = await fetchInventory();
+        renderItemCards(items);
     } catch (err) {
         grid.innerHTML = '<div class="error">Fehler beim Laden.</div>';
         console.error(err);

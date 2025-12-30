@@ -19,13 +19,18 @@ final class InventoryRepository
      */
     public function listItems(string $view, array $filters, int $limit = 20, int $offset = 0): array
     {
-        $conditions = ['ii.status = "IN_FREEZER"'];
-        $params = [];
+        $conditions = ['ii.status = :status'];
+        $params = ['status' => 'IN_FREEZER'];
 
-        if ($view === 'ingredient') {
-            $conditions[] = "ii.item_type = 'Z'";
-        } elseif ($view === 'single') {
-            $conditions[] = "ii.item_type <> 'Z'";
+        $mealTypes = ['MEAL', 'M'];
+        $ingredientTypes = ['INGREDIENT', 'Z'];
+
+        if ($view === 'meals') {
+            $conditions[] = $this->buildInCondition('ii.item_type', $mealTypes, $params, 'meal');
+        } elseif ($view === 'ingredient') {
+            $conditions[] = $this->buildInCondition('ii.item_type', $ingredientTypes, $params, 'ing');
+        } else {
+            $conditions[] = $this->buildNotInCondition('ii.item_type', array_merge($mealTypes, $ingredientTypes), $params, 'nt');
         }
 
         if (!empty($filters['q'])) {
@@ -62,6 +67,36 @@ final class InventoryRepository
         $stmt->execute();
 
         return $stmt->fetchAll();
+    }
+
+    /**
+     * @param array<int, string> $values
+     */
+    private function buildInCondition(string $column, array $values, array &$params, string $prefix): string
+    {
+        $placeholders = [];
+        foreach ($values as $idx => $value) {
+            $key = $prefix . $idx;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $value;
+        }
+
+        return $column . ' IN (' . implode(',', $placeholders) . ')';
+    }
+
+    /**
+     * @param array<int, string> $values
+     */
+    private function buildNotInCondition(string $column, array $values, array &$params, string $prefix): string
+    {
+        $placeholders = [];
+        foreach ($values as $idx => $value) {
+            $key = $prefix . $idx;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $value;
+        }
+
+        return $column . ' NOT IN (' . implode(',', $placeholders) . ')';
     }
 
     /**
