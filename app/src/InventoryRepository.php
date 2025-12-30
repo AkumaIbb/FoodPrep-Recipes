@@ -86,7 +86,11 @@ final class InventoryRepository
         if ($storageType !== 'BOX') {
             $containerId = null;
         }
-        $this->pdo->beginTransaction();
+        $ownTx = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $ownTx = true;
+        }
         try {
             if (empty($data['id_code'])) {
                 $data['id_code'] = $this->generateIdCode($itemType);
@@ -128,7 +132,9 @@ final class InventoryRepository
             $evt = $this->pdo->prepare('INSERT INTO inventory_events (inventory_item_id, event_type, to_status) VALUES (:id, "CREATED", "IN_FREEZER")');
             $evt->execute(['id' => $itemId]);
 
-            $this->pdo->commit();
+            if ($ownTx) {
+                $this->pdo->commit();
+            }
 
             return [
                 'id' => $itemId,
@@ -136,10 +142,14 @@ final class InventoryRepository
                 'name' => $data['name'],
             ];
         } catch (RuntimeException $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $e;
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw new RuntimeException('create_failed: ' . $e->getMessage(), 0, $e);
         }
     }
@@ -171,7 +181,11 @@ final class InventoryRepository
         $ids = array_map('intval', $itemIds);
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
 
-        $this->pdo->beginTransaction();
+        $ownTx = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $ownTx = true;
+        }
         try {
             $select = $this->pdo->prepare("SELECT id, status, container_id FROM inventory_items WHERE id IN ({$placeholders}) FOR UPDATE");
             $select->execute($ids);
@@ -204,13 +218,19 @@ final class InventoryRepository
                 $stmt->execute($containerIds);
             }
 
-            $this->pdo->commit();
+            if ($ownTx) {
+                $this->pdo->commit();
+            }
             return $ids;
         } catch (RuntimeException $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $e;
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw new RuntimeException('takeout_failed: ' . $e->getMessage(), 0, $e);
         }
     }
