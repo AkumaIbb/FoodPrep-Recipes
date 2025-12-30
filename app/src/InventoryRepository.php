@@ -173,7 +173,7 @@ final class InventoryRepository
 
         $this->pdo->beginTransaction();
         try {
-            $select = $this->pdo->prepare("SELECT id, status FROM inventory_items WHERE id IN ({$placeholders}) FOR UPDATE");
+            $select = $this->pdo->prepare("SELECT id, status, container_id FROM inventory_items WHERE id IN ({$placeholders}) FOR UPDATE");
             $select->execute($ids);
             $rows = $select->fetchAll();
             if (count($rows) !== count($ids)) {
@@ -192,6 +192,16 @@ final class InventoryRepository
             $evt = $this->pdo->prepare('INSERT INTO inventory_events (inventory_item_id, event_type, from_status, to_status) VALUES (:id, "STATUS_CHANGED", "IN_FREEZER", "TAKEN_OUT")');
             foreach ($ids as $id) {
                 $evt->execute(['id' => $id]);
+            }
+
+            $containerIds = array_values(array_unique(array_map(function ($row) {
+                return $row['container_id'] !== null ? (int)$row['container_id'] : null;
+            }, $rows)));
+            $containerIds = array_filter($containerIds, fn($v) => $v !== null);
+            if (!empty($containerIds)) {
+                $place = implode(',', array_fill(0, count($containerIds), '?'));
+                $stmt = $this->pdo->prepare("UPDATE containers SET in_use = 0 WHERE id IN ({$place})");
+                $stmt->execute($containerIds);
             }
 
             $this->pdo->commit();
