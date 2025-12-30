@@ -50,6 +50,11 @@ const componentFormState = {
     kcalManuallyEdited: false,
 };
 
+const KCAL_ESTIMATE_STORAGE_KEY = 'kcal_estimate_last';
+const KCAL_CLIENT_COOLDOWN_MS = 60 * 1000;
+const KCAL_DEBOUNCE_MS = 2000;
+let kcalCooldownTimer = null;
+
 async function initI18n() {
     const locale = resolveLocale();
     await loadLocale(locale);
@@ -415,6 +420,7 @@ function bindRecipePage() {
     const modalClose = document.getElementById('recipe-modal-close');
     const form = document.getElementById('recipe-form');
     const kcalButton = document.getElementById('kcal-estimate');
+    const ingredientsField = form?.elements['ingredients_text'];
 
     if (search) {
         search.addEventListener('input', () => {
@@ -470,10 +476,23 @@ function bindRecipePage() {
     }
 
     if (kcalButton) {
-        kcalButton.addEventListener('click', () => {
-            alert(t('recipes.kcal_estimate_soon'));
+        kcalButton.dataset.defaultLabel = kcalButton.textContent;
+        let debounce = false;
+        kcalButton.addEventListener('click', async () => {
+            if (debounce || kcalButton.disabled) return;
+            debounce = true;
+            setTimeout(() => {
+                debounce = false;
+            }, KCAL_DEBOUNCE_MS);
+            await estimateKcal();
         });
     }
+
+    if (ingredientsField) {
+        ingredientsField.addEventListener('input', () => updateKcalButtonState());
+    }
+
+    updateKcalButtonState();
 
     loadRecipes();
 }
@@ -645,6 +664,132 @@ function setRecipeError(message, inModal = false) {
     } else {
         el.classList.remove('hidden');
         el.textContent = message;
+    }
+}
+
+async function estimateKcal() {
+    const form = document.getElementById('recipe-form');
+    const button = document.getElementById('kcal-estimate');
+    if (!form || !button) return;
+
+    const ingredientsField = form.elements['ingredients_text'];
+    const yieldField = form.elements['yield_portions'];
+    const kcalField = form.elements['kcal_per_portion'];
+    const ingredientsText = (ingredientsField?.value || '').toString().trim();
+    const yieldPortions = toInt(yieldField?.value) || 1;
+
+    if (!ingredientsText) {
+        setRecipeError('Bitte Zutaten eintragen.', true);
+        return;
+    }
+
+    setRecipeError('', true);
+    button.disabled = true;
+    button.dataset.loading = '1';
+    button.textContent = 'Schätze…';
+    setLocalKcalTimestamp(Date.now());
+    updateKcalButtonState();
+
+    try {
+        const res = await fetch('/api/recipes/estimate-kcal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ingredients_text: ingredientsText, yield_portions: yieldPortions }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+            throw {
+                code: json.error || 'estimate_failed',
+                retry_after_seconds: json.retry_after_seconds ?? null,
+            };
+        }
+
+        if (kcalField) {
+            kcalField.value = json.kcal_per_portion ?? '';
+        }
+        showToast('Kalorien übernommen');
+    } catch (err) {
+        const code = err?.code || err?.message || 'estimate_failed';
+        const retry = err?.retry_after_seconds ?? null;
+        let message = 'Kalorien konnten nicht geschätzt werden.';
+        if (code === 'missing_ingredients') {
+            message = 'Bitte Zutaten eintragen.';
+        } else if (code === 'rate_limited') {
+            const waitSeconds = typeof retry === 'number' && retry > 0 ? Math.round(retry) : Math.ceil(KCAL_CLIENT_COOLDOWN_MS / 1000);
+            const adjusted = Date.now() - (KCAL_CLIENT_COOLDOWN_MS - waitSeconds * 1000);
+            setLocalKcalTimestamp(adjusted);
+            message = `Bitte warten ${waitSeconds}s bevor du erneut schätzt.`;
+        } else if (code === 'openai_not_configured') {
+            message = 'Kalorien-Schätzung ist nicht konfiguriert.';
+        } else if (code === 'openai_invalid_response') {
+            message = 'Unerwartete Antwort beim Schätzen.';
+        } else if (code === 'openai_error') {
+            message = 'Fehler bei der Anfrage an den Schätzdienst.';
+        }
+        setRecipeError(message, true);
+    } finally {
+        button.dataset.loading = '0';
+        updateKcalButtonState();
+    }
+}
+
+function updateKcalButtonState() {
+    const form = document.getElementById('recipe-form');
+    const button = document.getElementById('kcal-estimate');
+    if (!form || !button) return;
+
+    if (!button.dataset.defaultLabel) {
+        button.dataset.defaultLabel = button.textContent;
+    }
+    const baseLabel = button.dataset.defaultLabel;
+
+    if (button.dataset.loading === '1') {
+        button.disabled = true;
+        button.textContent = 'Schätze…';
+        return;
+    }
+
+    const ingredientsText = (form.elements['ingredients_text']?.value || '').toString();
+    const hasIngredients = ingredientsText.trim().length > 0;
+    const cooldown = getLocalKcalCooldownRemaining();
+    const shouldDisable = !hasIngredients || cooldown > 0;
+
+    button.disabled = shouldDisable;
+    if (shouldDisable && cooldown > 0) {
+        button.textContent = `Bitte warten (${cooldown}s)`;
+    } else {
+        button.textContent = baseLabel;
+    }
+
+    if (cooldown > 0) {
+        if (kcalCooldownTimer) clearTimeout(kcalCooldownTimer);
+        kcalCooldownTimer = setTimeout(updateKcalButtonState, 1000);
+    } else if (kcalCooldownTimer) {
+        clearTimeout(kcalCooldownTimer);
+        kcalCooldownTimer = null;
+    }
+}
+
+function getLocalKcalCooldownRemaining() {
+    try {
+        const raw = localStorage.getItem(KCAL_ESTIMATE_STORAGE_KEY);
+        const last = raw ? parseInt(raw, 10) : NaN;
+        if (Number.isNaN(last)) return 0;
+        const elapsed = Date.now() - last;
+        if (elapsed < KCAL_CLIENT_COOLDOWN_MS) {
+            return Math.ceil((KCAL_CLIENT_COOLDOWN_MS - elapsed) / 1000);
+        }
+    } catch (e) {
+        return 0;
+    }
+    return 0;
+}
+
+function setLocalKcalTimestamp(timestampMs) {
+    try {
+        localStorage.setItem(KCAL_ESTIMATE_STORAGE_KEY, String(timestampMs));
+    } catch (e) {
+        // ignore storage issues
     }
 }
 
