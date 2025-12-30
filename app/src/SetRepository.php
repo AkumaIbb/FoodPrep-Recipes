@@ -66,21 +66,31 @@ final class SetRepository
 
         $note = $this->optionalText($payload['note'] ?? null);
 
-        $this->pdo->beginTransaction();
+        $ownTx = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $ownTx = true;
+        }
         try {
             $stmt = $this->pdo->prepare('INSERT INTO sets (name, note) VALUES (:n, :note)');
             $stmt->execute(['n' => $name, 'note' => $note]);
             $setId = (int)$this->pdo->lastInsertId();
 
             $this->insertComponents($setId, $components);
-            $this->pdo->commit();
+            if ($ownTx) {
+                $this->pdo->commit();
+            }
 
             return $this->getSet($setId) ?? ['id' => $setId];
         } catch (RuntimeException $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $e;
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw new RuntimeException('create_failed: ' . $e->getMessage(), 0, $e);
         }
     }
@@ -105,7 +115,11 @@ final class SetRepository
             throw new RuntimeException('missing_components');
         }
 
-        $this->pdo->beginTransaction();
+        $ownTx = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $ownTx = true;
+        }
         try {
             $stmt = $this->pdo->prepare('UPDATE sets SET name = :n, note = :note, updated_at = NOW() WHERE id = :id');
             $stmt->execute(['n' => $name, 'note' => $note, 'id' => $id]);
@@ -113,13 +127,19 @@ final class SetRepository
             $this->pdo->prepare('DELETE FROM set_components WHERE set_id = :sid')->execute(['sid' => $id]);
             $this->insertComponents($id, $components);
 
-            $this->pdo->commit();
+            if ($ownTx) {
+                $this->pdo->commit();
+            }
             return $this->getSet($id) ?? ['id' => $id];
         } catch (RuntimeException $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $e;
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw new RuntimeException('update_failed: ' . $e->getMessage(), 0, $e);
         }
     }
@@ -172,7 +192,11 @@ final class SetRepository
 
         $normalized = $this->normalizeBoxes($boxes, $componentMap);
 
-        $this->pdo->beginTransaction();
+        $ownTx = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $ownTx = true;
+        }
         try {
             $containerRepo->lockContainers(array_column($normalized, 'container_id'));
             $available = $containerRepo->listFreeContainers();
@@ -224,13 +248,19 @@ final class SetRepository
                 ];
             }
 
-            $this->pdo->commit();
+            if ($ownTx) {
+                $this->pdo->commit();
+            }
             return $created;
         } catch (RuntimeException $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $e;
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
+            if ($ownTx && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw new RuntimeException('boxes_failed: ' . $e->getMessage(), 0, $e);
         }
     }
