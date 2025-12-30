@@ -198,10 +198,16 @@ final class SetRepository
             $ownTx = true;
         }
         try {
-            $containerRepo->lockContainers(array_column($normalized, 'container_id'));
+            $realBoxes = array_values(array_filter($normalized, fn(array $box) => $box['is_bag'] === false));
+            $containerRepo->lockContainers(array_column($realBoxes, 'container_id'));
             $available = $containerRepo->listFreeContainers();
-            $availableIds = array_column($available, 'id');
-            foreach ($normalized as $box) {
+            $availableIds = [];
+            foreach ($available as $row) {
+                if (is_numeric($row['id'])) {
+                    $availableIds[] = (int)$row['id'];
+                }
+            }
+            foreach ($realBoxes as $box) {
                 if (!in_array($box['container_id'], $availableIds, true)) {
                     throw new RuntimeException('container_not_available');
                 }
@@ -229,7 +235,9 @@ final class SetRepository
                     $rel->execute(['bid' => $boxId, 'cid' => $cid]);
                 }
 
-                $containerRepo->setInUse([$box['container_id']], true);
+                if ($box['is_bag'] === false) {
+                    $containerRepo->setInUse([$box['container_id']], true);
+                }
 
                 $inventoryRepo->createItem([
                     'item_type' => $this->prefixForType($box['box_type']),
@@ -310,7 +318,7 @@ final class SetRepository
                 'id' => (int)$row['id'],
                 'box_code' => $row['box_code'],
                 'box_type' => $row['box_type'],
-                'container_id' => (int)$row['container_id'],
+                'container_id' => $row['container_id'] !== null ? (int)$row['container_id'] : null,
                 'portion_factor' => $row['portion_factor'] !== null ? (float)$row['portion_factor'] : null,
                 'portion_text' => $row['portion_text'],
                 'kcal_total' => $row['kcal_total'] !== null ? (int)$row['kcal_total'] : null,
@@ -399,19 +407,23 @@ final class SetRepository
         $result = [];
         $usedContainers = [];
         foreach ($boxes as $box) {
-            $containerId = $this->optionalInt($box['container_id'] ?? null);
+            $rawContainer = $box['container_id'] ?? null;
+            $isBag = $this->isBagContainer($rawContainer);
+            $containerId = $isBag ? null : $this->optionalInt($rawContainer);
             $boxType = strtoupper(trim((string)($box['box_type'] ?? '')));
             $portionFactor = $box['portion_factor'] ?? null;
             $portionText = $this->optionalText($box['portion_text'] ?? null, 50);
             $componentIds = $box['component_ids'] ?? [];
 
-            if ($containerId === null || $boxType === '' || empty($componentIds)) {
+            if ((!$isBag && $containerId === null) || $boxType === '' || empty($componentIds)) {
                 continue;
             }
-            if (isset($usedContainers[$containerId])) {
+            if (!$isBag && isset($usedContainers[$containerId])) {
                 throw new RuntimeException('duplicate_container');
             }
-            $usedContainers[$containerId] = true;
+            if (!$isBag) {
+                $usedContainers[$containerId] = true;
+            }
 
             $componentIds = array_values(array_unique(array_map('intval', $componentIds)));
             foreach ($componentIds as $cid) {
@@ -436,6 +448,7 @@ final class SetRepository
                 'portion_factor' => $portionFactor,
                 'portion_text' => $portionText,
                 'component_ids' => $componentIds,
+                'is_bag' => $isBag,
             ];
         }
 
@@ -475,6 +488,15 @@ final class SetRepository
     {
         $upper = strtoupper($boxType);
         return self::BOX_PREFIX[$upper] ?? 'X';
+    }
+
+    private function isBagContainer(mixed $value): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+        $normalized = strtoupper((string)$value);
+        return in_array($normalized, ['FREEZER_BAG', 'VACUUM_BAG', '-1', '-2'], true);
     }
 
     /**

@@ -115,7 +115,32 @@ final class ContainerRepository
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute();
-        return $stmt->fetchAll();
+        $items = $stmt->fetchAll();
+
+        $items[] = [
+            'id' => 'FREEZER_BAG',
+            'container_code' => 'Gefrierbeutel',
+            'container_type_id' => null,
+            'is_active' => 1,
+            'in_use' => 0,
+            'note' => 'Einweg',
+            'shape' => null,
+            'volume_ml' => null,
+            'material' => null,
+        ];
+        $items[] = [
+            'id' => 'VACUUM_BAG',
+            'container_code' => 'Vakuumierbeutel',
+            'container_type_id' => null,
+            'is_active' => 1,
+            'in_use' => 0,
+            'note' => 'Einweg',
+            'shape' => null,
+            'volume_ml' => null,
+            'material' => null,
+        ];
+
+        return $items;
     }
 
     /**
