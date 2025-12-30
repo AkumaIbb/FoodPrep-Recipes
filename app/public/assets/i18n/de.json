@@ -72,6 +72,7 @@
   "recipes.load_error": "Rezepte konnten nicht geladen werden.",
   "recipes.kcal_estimate": "Kalorien mit ChatGPT schätzen",
   "recipes.kcal_estimate_soon": "Kalorien-Schätzung erfordert einen hinterlegten OpenAI API Key.",
+  "recipes.kcal_estimate_wait_minute": "Bitte 1 Minute warten",
 
   "sets.title": "Sets",
   "sets.builder.title": "Set-Builder",
