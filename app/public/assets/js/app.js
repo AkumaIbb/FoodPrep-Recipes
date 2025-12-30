@@ -1,6 +1,8 @@
 const page = document.body.dataset.page || 'inventory';
 const initialLocale = document.body.dataset.locale || 'de';
 
+const LOCALE_STORAGE_KEY = 'locale';
+
 const i18nState = {
     currentLocale: 'de',
     dict: {},
@@ -60,11 +62,28 @@ function resolveLocale() {
     if (paramLocale && ['de', 'en'].includes(paramLocale)) {
         return paramLocale;
     }
-    const saved = localStorage.getItem('locale');
+    const saved = getSavedLocale();
     if (saved && ['de', 'en'].includes(saved)) {
         return saved;
     }
     return initialLocale || 'de';
+}
+
+function getSavedLocale() {
+    try {
+        return localStorage.getItem(LOCALE_STORAGE_KEY);
+    } catch (e) {
+        console.warn('Unable to read locale from storage', e);
+        return null;
+    }
+}
+
+function saveLocale(locale) {
+    try {
+        localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch (e) {
+        console.warn('Unable to persist locale selection', e);
+    }
 }
 
 async function loadLocale(locale) {
@@ -73,7 +92,7 @@ async function loadLocale(locale) {
         const dict = await res.json();
         i18nState.currentLocale = ['de', 'en'].includes(locale) ? locale : 'de';
         i18nState.dict = dict || {};
-        localStorage.setItem('locale', i18nState.currentLocale);
+        saveLocale(i18nState.currentLocale);
         document.documentElement.lang = i18nState.currentLocale;
         const switcher = document.getElementById('locale-switcher');
         if (switcher) switcher.value = i18nState.currentLocale;
