@@ -1,4 +1,10 @@
 const page = document.body.dataset.page || 'inventory';
+const initialLocale = document.body.dataset.locale || 'de';
+
+const i18nState = {
+    currentLocale: 'de',
+    dict: {},
+};
 
 const state = {
     view: 'meals',
@@ -42,7 +48,96 @@ const componentFormState = {
     kcalManuallyEdited: false,
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+async function initI18n() {
+    const locale = resolveLocale();
+    await loadLocale(locale);
+    initLocaleSwitcher();
+}
+
+function resolveLocale() {
+    const params = new URLSearchParams(window.location.search);
+    const paramLocale = params.get('lang');
+    if (paramLocale && ['de', 'en'].includes(paramLocale)) {
+        return paramLocale;
+    }
+    const saved = localStorage.getItem('locale');
+    if (saved && ['de', 'en'].includes(saved)) {
+        return saved;
+    }
+    return initialLocale || 'de';
+}
+
+async function loadLocale(locale) {
+    try {
+        const res = await fetch(`/assets/i18n/${locale}.json`);
+        const dict = await res.json();
+        i18nState.currentLocale = ['de', 'en'].includes(locale) ? locale : 'de';
+        i18nState.dict = dict || {};
+        localStorage.setItem('locale', i18nState.currentLocale);
+        document.documentElement.lang = i18nState.currentLocale;
+        const switcher = document.getElementById('locale-switcher');
+        if (switcher) switcher.value = i18nState.currentLocale;
+        applyI18n(document);
+    } catch (e) {
+        console.error('Failed to load locale', e);
+    }
+}
+
+function initLocaleSwitcher() {
+    const switcher = document.getElementById('locale-switcher');
+    if (!switcher) return;
+    switcher.value = i18nState.currentLocale;
+    switcher.addEventListener('change', async () => {
+        const value = switcher.value;
+        if (value && ['de', 'en'].includes(value)) {
+            await loadLocale(value);
+        }
+    });
+}
+
+function t(key, vars = {}) {
+    const template = i18nState.dict[key] || key;
+    return template.replace(/\{(.*?)\}/g, (_, name) => (vars && vars[name] !== undefined ? vars[name] : `{${name}}`));
+}
+
+function applyI18n(root = document) {
+    root.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.dataset.i18n;
+        if (!key) return;
+        const translated = t(key);
+        if (el.childElementCount === 0) {
+            el.textContent = translated;
+        } else {
+            let textNode = null;
+            for (const node of el.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    textNode = node;
+                    break;
+                }
+            }
+            if (textNode) {
+                textNode.textContent = translated + ' ';
+            } else {
+                el.insertBefore(document.createTextNode(translated + ' '), el.firstChild);
+            }
+        }
+    });
+
+    root.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.dataset.i18nPlaceholder;
+        if (!key || !('placeholder' in el)) return;
+        el.placeholder = t(key);
+    });
+
+    root.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
+        const key = el.dataset.i18nAriaLabel;
+        if (!key) return;
+        el.setAttribute('aria-label', t(key));
+    });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await initI18n();
     bindMenu();
     if (page === 'inventory') {
         bindFilters();
@@ -117,13 +212,15 @@ function bindModal() {
 
 async function loadData() {
     const grid = document.getElementById('grid');
-    grid.innerHTML = '<div class="loading">Lade...</div>';
+    grid.innerHTML = `<div class="loading" data-i18n="common.loading">${t('common.loading')}</div>`;
+    applyI18n(grid);
 
     try {
         const items = await fetchInventory();
         renderItemCards(items);
     } catch (err) {
-        grid.innerHTML = '<div class="error">Fehler beim Laden.</div>';
+        grid.innerHTML = `<div class="error" data-i18n="common.error_loading">${t('common.error_loading')}</div>`;
+        applyI18n(grid);
         console.error(err);
     }
 }
@@ -157,7 +254,8 @@ function renderMealCards(items) {
     const grid = document.getElementById('grid');
     grid.innerHTML = '';
     if (!items.length) {
-        grid.innerHTML = '<div class="empty">Keine Sets gefunden.</div>';
+        grid.innerHTML = `<div class="empty" data-i18n="inventory.empty_sets">${t('inventory.empty_sets')}</div>`;
+        applyI18n(grid);
         return;
     }
 
@@ -166,7 +264,7 @@ function renderMealCards(items) {
         card.className = 'card';
         card.innerHTML = `
             <div class="card-title">${item.name}</div>
-            <div class="meta">${item.complete_count}x komplett</div>
+            <div class="meta">${t('inventory.complete_count', { count: item.complete_count })}</div>
             <div class="flags">${renderFlags(item)}</div>
             <div class="fifo">${(item.fifo_ids || []).join(' + ')}</div>
         `;
@@ -177,9 +275,9 @@ function renderMealCards(items) {
 
 function renderFlags(item) {
     const flags = [];
-    if (item.is_vegan) flags.push('🌱 vegan');
-    else if (item.is_veggie) flags.push('🥕 veggie');
-    if (item.is_expiring) flags.push('⏳ bald ablaufend');
+    if (item.is_vegan) flags.push(t('flags.vegan_icon'));
+    else if (item.is_veggie) flags.push(t('flags.veggie_icon'));
+    if (item.is_expiring) flags.push(t('flags.expiring'));
     return flags.join(' · ');
 }
 
@@ -187,7 +285,8 @@ function renderItemCards(items) {
     const grid = document.getElementById('grid');
     grid.innerHTML = '';
     if (!items.length) {
-        grid.innerHTML = '<div class="empty">Keine Items gefunden.</div>';
+        grid.innerHTML = `<div class="empty" data-i18n="inventory.empty_items">${t('inventory.empty_items')}</div>`;
+        applyI18n(grid);
         return;
     }
 
@@ -197,9 +296,9 @@ function renderItemCards(items) {
         const bestBefore = item.computed_best_before ? item.computed_best_before.substring(0, 10) : '-';
         card.innerHTML = `
             <div class="card-title">${item.name}</div>
-            <div class="meta">ID ${item.id_code} · Typ ${item.item_type}</div>
+            <div class="meta">${t('inventory.item_meta', { id: item.id_code, type: item.item_type })}</div>
             <div class="flags">${item.is_veggie ? '🥕' : ''} ${item.is_vegan ? '🌱' : ''}</div>
-            <div class="fifo">Frosten: ${item.frozen_at} · MHD: ${bestBefore}</div>
+            <div class="fifo">${t('inventory.frozen_at', { date: item.frozen_at })} · ${t('inventory.best_before', { date: bestBefore })}</div>
         `;
         card.addEventListener('click', () => openItemModal(item));
         grid.appendChild(card);
@@ -209,7 +308,7 @@ function renderItemCards(items) {
 async function openMealModal(id) {
     const modal = document.getElementById('modal');
     const body = document.getElementById('modal-body');
-    body.innerHTML = '<div class="loading">Lade...</div>';
+    body.innerHTML = `<div class="loading" data-i18n="common.loading">${t('common.loading')}</div>`;
     modal.classList.remove('hidden');
 
     try {
@@ -219,22 +318,22 @@ async function openMealModal(id) {
         const itemsList = (data.items || []).map((it) => `
             <li>
                 <strong>${it.id_code}</strong> – ${it.name} (${it.item_type})
-                <div class="sub">Gefroren: ${it.frozen_at}, MHD: ${it.computed_best_before?.substring(0, 10) || '-'}${it.container_code ? `, Box ${it.container_code}` : ''}</div>
+                <div class="sub">${t('inventory.frozen_at', { date: it.frozen_at })}, ${t('inventory.best_before', { date: it.computed_best_before?.substring(0, 10) || '-' })}${it.container_code ? `, ${t('inventory.box', { code: it.container_code })}` : ''}</div>
             </li>`).join('');
 
         body.innerHTML = `
             <h2>${data.name}</h2>
             <div class="flags">${renderFlags(data)}</div>
-            <p>${data.complete_count}x komplett verfügbar</p>
-            <button class="danger" data-action="takeout" data-id="${data.id}">Entnehmen</button>
-            <h3>FIFO Auswahl</h3>
+            <p>${t('inventory.complete_available', { count: data.complete_count })}</p>
+            <button class="danger" data-action="takeout" data-id="${data.id}">${t('inventory.takeout')}</button>
+            <h3>${t('inventory.fifo_selection')}</h3>
             <ul class="item-list">${itemsList}</ul>
         `;
 
         const btn = body.querySelector('button[data-action="takeout"]');
         btn.addEventListener('click', async () => {
             btn.disabled = true;
-            btn.textContent = 'Entnehme...';
+            btn.textContent = t('inventory.taking_out');
             try {
                 const res = await fetch(`/api/meal_sets/${id}/takeout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                 const json = await res.json();
@@ -243,12 +342,12 @@ async function openMealModal(id) {
                 loadData();
             } catch (err) {
                 btn.disabled = false;
-                btn.textContent = 'Entnehmen';
-                alert('Entnahme fehlgeschlagen');
+                btn.textContent = t('inventory.takeout');
+                alert(t('inventory.takeout_failed'));
             }
         });
     } catch (err) {
-        body.innerHTML = '<div class="error">Fehler beim Laden.</div>';
+        body.innerHTML = `<div class="error" data-i18n="common.error_loading">${t('common.error_loading')}</div>`;
     }
 }
 
@@ -258,16 +357,16 @@ function openItemModal(item) {
     const bestBefore = item.computed_best_before ? item.computed_best_before.substring(0, 10) : '-';
     body.innerHTML = `
         <h2>${item.name}</h2>
-        <div class="meta">${item.id_code} · Typ ${item.item_type}</div>
-        <p>Gefroren: ${item.frozen_at}<br/>MHD: ${bestBefore}</p>
-        <button class="danger" data-action="takeout-item" data-id="${item.id}">Entnehmen</button>
+        <div class="meta">${t('inventory.item_meta', { id: item.id_code, type: item.item_type })}</div>
+        <p>${t('inventory.frozen_at', { date: item.frozen_at })}<br/>${t('inventory.best_before', { date: bestBefore })}</p>
+        <button class="danger" data-action="takeout-item" data-id="${item.id}">${t('inventory.takeout')}</button>
     `;
     modal.classList.remove('hidden');
 
     const btn = body.querySelector('button[data-action="takeout-item"]');
     btn.addEventListener('click', async () => {
         btn.disabled = true;
-        btn.textContent = 'Entnehme...';
+        btn.textContent = t('inventory.taking_out');
         try {
             const res = await fetch('/api/inventory/takeout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_ids: [item.id] }) });
             const json = await res.json();
@@ -276,8 +375,8 @@ function openItemModal(item) {
             loadData();
         } catch (err) {
             btn.disabled = false;
-            btn.textContent = 'Entnehmen';
-            alert('Entnahme fehlgeschlagen');
+            btn.textContent = t('inventory.takeout');
+            alert(t('inventory.takeout_failed'));
         }
     });
 }
@@ -353,7 +452,7 @@ function bindRecipePage() {
 
     if (kcalButton) {
         kcalButton.addEventListener('click', () => {
-            alert('kommt später');
+            alert(t('recipes.kcal_estimate_soon'));
         });
     }
 
@@ -370,7 +469,7 @@ async function loadRecipes() {
     const tbody = document.getElementById('recipes-body');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">Lade...</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="6" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
     setRecipeError('');
 
     try {
@@ -390,8 +489,8 @@ async function loadRecipes() {
         renderRecipes(recipeState.list);
     } catch (err) {
         console.error(err);
-        setRecipeError('Rezepte konnten nicht geladen werden.');
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Fehler beim Laden.</td></tr>';
+        setRecipeError(t('recipes.load_error'));
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="6" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
     }
 }
 
@@ -401,7 +500,7 @@ function renderRecipes(items) {
 
     tbody.innerHTML = '';
     if (!items.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Keine Rezepte vorhanden.</td></tr>';
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="6" data-i18n="recipes.empty">${t('recipes.empty')}</td></tr>`;
         return;
     }
 
@@ -422,8 +521,8 @@ function renderRecipes(items) {
 
 function renderRecipeFlags(item) {
     const flags = [];
-    if (item.is_vegan) flags.push('🌱 vegan');
-    else if (item.is_veggie) flags.push('🥕 veggie');
+    if (item.is_vegan) flags.push(t('flags.vegan_icon'));
+    else if (item.is_veggie) flags.push(t('flags.veggie_icon'));
     return flags.join(' ');
 }
 
@@ -491,11 +590,11 @@ async function saveRecipe() {
         if (!res.ok || !json.ok) throw new Error(json.error?.message || 'save_failed');
 
         closeRecipeModal();
-        showToast('Gespeichert');
+        showToast(t('common.saved'));
         await loadRecipes();
     } catch (err) {
         console.error(err);
-        setRecipeError('Speichern fehlgeschlagen.', true);
+        setRecipeError(t('common.save_failed'), true);
     } finally {
         if (submitBtn) submitBtn.disabled = false;
     }
@@ -635,14 +734,14 @@ function buildContainerPayload(formData) {
 async function loadContainerTypes() {
     const tbody = document.getElementById('container-types-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="5" class="loading">Lade...</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="5" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
     try {
         const items = await fetchContainerTypes();
         containerState.types = items;
         renderContainerTypes(items);
         populateContainerTypeSelect(items);
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="5" class="error">Fehler beim Laden.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="5" class="error" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
         console.error(err);
     }
 }
@@ -652,7 +751,7 @@ function renderContainerTypes(items) {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (!items.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Keine Typen erfasst.</td></tr>';
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="5" data-i18n="containers.types.empty">${t('containers.types.empty')}</td></tr>`;
         return;
     }
 
@@ -689,12 +788,12 @@ function populateContainerTypeSelect(items) {
 async function loadContainers() {
     const tbody = document.getElementById('containers-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="7" class="loading">Lade...</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="7" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
     try {
         const items = await fetchContainers(containerState.active);
         renderContainers(items);
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" class="error">Fehler beim Laden.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="7" class="error" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
         console.error(err);
     }
 }
@@ -704,15 +803,15 @@ function renderContainers(items) {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (!items.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Keine Container angelegt.</td></tr>';
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="7" data-i18n="containers.list.empty">${t('containers.list.empty')}</td></tr>`;
         return;
     }
 
     items.forEach((item) => {
         const tr = document.createElement('tr');
         const typeLabel = item.container_type_id ? `${item.shape || '-'} · ${item.volume_ml || '?'} ml` : '-';
-        const status = item.is_active ? 'Aktiv' : 'Inaktiv';
-        const buttonLabel = item.is_active ? 'Deaktivieren' : 'Reaktivieren';
+        const status = item.is_active ? t('containers.status.active') : t('containers.status.inactive');
+        const buttonLabel = item.is_active ? t('containers.actions.deactivate') : t('containers.actions.reactivate');
         tr.innerHTML = `
             <td>${item.container_code}</td>
             <td>${typeLabel}</td>
@@ -729,7 +828,7 @@ function renderContainers(items) {
                 await updateContainer(item.id, { is_active: item.is_active ? 0 : 1 });
                 await loadContainers();
             } catch (err) {
-                alert('Status konnte nicht geändert werden.');
+                alert(t('containers.actions.toggle_failed'));
                 console.error(err);
                 btn.disabled = false;
             }
@@ -820,7 +919,7 @@ async function loadSets() {
         setState.list = json.items || [];
         renderSetList();
     } catch (e) {
-        showSetError('Sets konnten nicht geladen werden.');
+        showSetError(t('sets.load_error'));
     }
 }
 
@@ -829,7 +928,7 @@ function renderSetList() {
     if (!body) return;
     body.innerHTML = '';
     if (!setState.list.length) {
-        body.innerHTML = '<tr class="empty-row"><td colspan="4">Keine Sets vorhanden.</td></tr>';
+        body.innerHTML = `<tr class="empty-row"><td colspan="4" data-i18n="sets.empty">${t('sets.empty')}</td></tr>`;
         return;
     }
 
@@ -972,7 +1071,7 @@ function renderComponentsTable() {
     if (!body) return;
     body.innerHTML = '';
     if (!setState.builder.components.length) {
-        body.innerHTML = '<tr class="empty-row"><td colspan="5">Keine Komponenten hinzugefügt.</td></tr>';
+        body.innerHTML = `<tr class="empty-row"><td colspan="5" data-i18n="sets.components.empty">${t('sets.components.empty')}</td></tr>`;
         return;
     }
 
@@ -983,7 +1082,7 @@ function renderComponentsTable() {
             <td>${formatComponentSource(comp)}</td>
             <td>${comp.amount_text || ''}</td>
             <td>${comp.kcal_total ?? '-'}</td>
-            <td><button type="button" class="link" data-index="${idx}">Entfernen</button></td>
+            <td><button type="button" class="link" data-index="${idx}">${t('common.remove')}</button></td>
         `;
         tr.querySelector('button')?.addEventListener('click', () => {
             setState.builder.components.splice(idx, 1);
@@ -1098,7 +1197,7 @@ async function loadRecipesForSets() {
         setState.builder.recipes = json.data || [];
         const select = document.getElementById('component-recipe');
         if (select) {
-            select.innerHTML = '<option value="">Rezept wählen</option>';
+            select.innerHTML = `<option value="">${t('sets.sources.choose_recipe')}</option>`;
             setState.builder.recipes.forEach((r) => {
                 const opt = document.createElement('option');
                 opt.value = r.id;
@@ -1116,16 +1215,16 @@ async function loadItemTypeDefaults() {
     if (!select) return;
 
     const fallback = [
-        { value: 'PROTEIN', label: 'Protein' },
-        { value: 'SIDE', label: 'Beilage' },
-        { value: 'SAUCE', label: 'Sauce' },
-        { value: 'BASE', label: 'Base' },
-        { value: 'BREAKFAST', label: 'Frühstück' },
-        { value: 'DESSERT', label: 'Dessert' },
-        { value: 'MISC', label: 'Misc' },
+        { value: 'PROTEIN', label: t('types.protein') },
+        { value: 'SIDE', label: t('types.side') },
+        { value: 'SAUCE', label: t('types.sauce') },
+        { value: 'BASE', label: t('types.base') },
+        { value: 'BREAKFAST', label: t('types.breakfast') },
+        { value: 'DESSERT', label: t('types.dessert') },
+        { value: 'MISC', label: t('types.misc') },
     ];
 
-    select.innerHTML = '<option value="">Box-Typ wählen</option>';
+    select.innerHTML = `<option value="">${t('sets.box.choose_type')}</option>`;
 
     try {
         const res = await fetch('/api/item-type-defaults');
@@ -1162,17 +1261,17 @@ async function loadFreeContainers() {
             select.innerHTML = '';
             const placeholder = document.createElement('option');
             placeholder.value = '';
-            placeholder.textContent = 'Container wählen';
+            placeholder.textContent = t('sets.box.choose_container');
             select.appendChild(placeholder);
             (json.items || []).forEach((c) => {
                 const opt = document.createElement('option');
                 opt.value = c.id;
-                opt.textContent = `${c.container_code || 'Container'}${c.note ? ' – ' + c.note : ''}`;
+                opt.textContent = `${c.container_code || t('sets.box.container_generic')}${c.note ? ' – ' + c.note : ''}`;
                 select.appendChild(opt);
             });
         }
         const info = document.getElementById('free-container-count');
-        if (info) info.textContent = `${(json.items || []).length} frei`;
+        if (info) info.textContent = t('sets.box.free_count', { count: (json.items || []).length });
     } catch (e) {
         // ignore
     }
@@ -1207,7 +1306,7 @@ function addBoxFromForm() {
     const componentIds = Array.from(form.querySelectorAll('#component-checklist input[type="checkbox"]:checked')).map((c) => parseInt(c.value, 10)).filter((v) => !Number.isNaN(v));
 
     if (!containerId || !boxType || !componentIds.length) {
-        showSetModalError('Bitte Container, Typ und Komponenten wählen.');
+        showSetModalError(t('sets.box.missing_fields'));
         return;
     }
 
@@ -1215,12 +1314,12 @@ function addBoxFromForm() {
     const parsedContainerId = isBag ? null : parseInt(containerId, 10);
 
     if (!isBag && setState.builder.boxes.some((b) => String(b.container_id) === String(parsedContainerId))) {
-        showSetModalError('Container ist bereits zugewiesen.');
+        showSetModalError(t('sets.box.duplicate_container'));
         return;
     }
 
     if (!portionFactor && !portionText) {
-        showSetModalError('Portionen-Info fehlt.');
+        showSetModalError(t('sets.box.missing_portion'));
         return;
     }
 
@@ -1245,7 +1344,7 @@ function renderBoxesTable() {
     if (!body) return;
     body.innerHTML = '';
     if (!setState.builder.boxes.length) {
-        body.innerHTML = '<tr class="empty-row"><td colspan="5">Noch keine Boxen hinzugefügt.</td></tr>';
+        body.innerHTML = `<tr class="empty-row"><td colspan="5" data-i18n="sets.box.empty">${t('sets.box.empty')}</td></tr>`;
         return;
     }
 
@@ -1256,7 +1355,7 @@ function renderBoxesTable() {
             <td>${box.container_label || box.container_id || '-'}</td>
             <td>${box.portion_factor || '-'} / ${box.portion_text || '-'}</td>
             <td>${box.component_ids.length}</td>
-            <td><button type="button" class="link" data-index="${idx}">Entfernen</button></td>
+            <td><button type="button" class="link" data-index="${idx}">${t('common.remove')}</button></td>
         `;
         tr.querySelector('button')?.addEventListener('click', () => {
             setState.builder.boxes.splice(idx, 1);
@@ -1268,11 +1367,11 @@ function renderBoxesTable() {
 
 async function packSet() {
     if (!setState.builder.setId) {
-        showSetModalError('Bitte zuerst das Set speichern.');
+        showSetModalError(t('sets.box.save_first'));
         return;
     }
     if (!setState.builder.boxes.length) {
-        showSetModalError('Füge mindestens eine Box hinzu.');
+        showSetModalError(t('sets.box.add_one'));
         return;
     }
 
@@ -1288,9 +1387,9 @@ async function packSet() {
         }
         closeSetModal();
         loadSets();
-        alert('Set gepackt');
+        alert(t('sets.box.packed'));
     } catch (e) {
-        showSetModalError('Packen fehlgeschlagen.');
+        showSetModalError(t('sets.box.pack_failed'));
     }
 }
 

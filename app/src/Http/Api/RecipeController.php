@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Http\Api;
 
+use App\I18n;
 use App\RecipeRepository;
 use RuntimeException;
 
@@ -11,7 +12,7 @@ final class RecipeController
     /**
      * @param array<string> $allowedTypes
      */
-    public function __construct(private RecipeRepository $recipes, private array $allowedTypes = ['MEAL','PROTEIN','SAUCE','SIDE','BASE','BREAKFAST','DESSERT','MISC'])
+    public function __construct(private RecipeRepository $recipes, private array $allowedTypes = ['MEAL','PROTEIN','SAUCE','SIDE','BASE','BREAKFAST','DESSERT','MISC'], private ?I18n $i18n = null)
     {
     }
 
@@ -95,7 +96,9 @@ final class RecipeController
 
     private function error(string $code, int $status = 400, string $message = ''): void
     {
-        $msg = $message ?: $code;
+        $key = 'errors.' . $code;
+        $translated = $this->i18n?->t($key) ?? null;
+        $msg = $message ?: ($translated ?: $code);
         $this->json(['ok' => false, 'error' => ['code' => $code, 'message' => $msg]], $status);
     }
 

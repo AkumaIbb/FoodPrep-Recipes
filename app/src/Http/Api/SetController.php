@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Http\Api;
 
+use App\I18n;
 use App\SetRepository;
 use App\InventoryRepository;
 use App\ContainerRepository;
@@ -13,7 +14,8 @@ final class SetController
     public function __construct(
         private SetRepository $sets,
         private InventoryRepository $inventory,
-        private ContainerRepository $containers
+        private ContainerRepository $containers,
+        private ?I18n $i18n = null
     ) {
     }
 
@@ -118,7 +120,9 @@ final class SetController
 
     private function error(string $code, int $status = 400, string $message = ''): void
     {
-        $msg = $message ?: $code;
+        $key = 'errors.' . $code;
+        $translated = $this->i18n?->t($key) ?? null;
+        $msg = $message ?: ($translated ?: $code);
         $this->json(['ok' => false, 'error' => ['code' => $code, 'message' => $msg]], $status);
     }
 
