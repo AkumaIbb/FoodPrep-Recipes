@@ -22,12 +22,28 @@ const recipeState = {
     editingId: null,
 };
 
+const setState = {
+    list: [],
+    builder: {
+        step: 1,
+        setId: null,
+        name: '',
+        note: '',
+        components: [],
+        boxes: [],
+        containers: [],
+        recipes: [],
+    },
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     bindMenu();
     if (page === 'inventory') {
         bindFilters();
         bindModal();
         loadData();
+    } else if (page === 'sets') {
+        bindSetPage();
     } else if (page === 'recipes') {
         bindRecipePage();
     } else {
@@ -763,4 +779,403 @@ async function updateContainer(id, payload) {
 function toInt(value) {
     const num = parseInt(value, 10);
     return Number.isNaN(num) ? null : num;
+}
+
+// Sets / Wizard
+function bindSetPage() {
+    loadSets();
+    const btn = document.getElementById('new-set-btn');
+    btn?.addEventListener('click', openSetModal);
+    bindSetModal();
+}
+
+function bindSetModal() {
+    const modal = document.getElementById('set-modal');
+    const close = document.getElementById('set-modal-close');
+    close?.addEventListener('click', closeSetModal);
+    modal?.addEventListener('click', (e) => {
+        if (e.target === modal) closeSetModal();
+    });
+
+    document.getElementById('component-source')?.addEventListener('change', toggleComponentSourceFields);
+    document.getElementById('add-component-btn')?.addEventListener('click', addComponentFromForm);
+    document.getElementById('step1-next')?.addEventListener('click', submitSetStep1);
+    document.getElementById('back-to-components')?.addEventListener('click', () => switchStep(1));
+    document.getElementById('pack-set-btn')?.addEventListener('click', packSet);
+    document.getElementById('add-box-btn')?.addEventListener('click', addBoxFromForm);
+
+    const nameInput = document.querySelector('#set-form input[name="name"]');
+    nameInput?.addEventListener('input', updateStep1NextState);
+}
+
+async function loadSets() {
+    try {
+        const res = await fetch('/api/sets');
+        const json = await res.json();
+        setState.list = json.items || [];
+        renderSetList();
+    } catch (e) {
+        showSetError('Sets konnten nicht geladen werden.');
+    }
+}
+
+function renderSetList() {
+    const body = document.getElementById('sets-body');
+    if (!body) return;
+    body.innerHTML = '';
+    if (!setState.list.length) {
+        body.innerHTML = '<tr class="empty-row"><td colspan="4">Keine Sets vorhanden.</td></tr>';
+        return;
+    }
+
+    setState.list.forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.name}</td>
+            <td>${item.note ? item.note : ''}</td>
+            <td>${item.updated_at ? new Date(item.updated_at).toLocaleDateString() : ''}</td>
+            <td>${item.box_count ?? '-'}</td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
+function showSetError(message) {
+    const el = document.getElementById('sets-error');
+    if (!el) return;
+    if (!message) {
+        el.classList.add('hidden');
+        el.textContent = '';
+    } else {
+        el.classList.remove('hidden');
+        el.textContent = message;
+    }
+}
+
+function openSetModal() {
+    resetBuilder();
+    const modal = document.getElementById('set-modal');
+    modal?.classList.remove('hidden');
+    loadRecipesForSets();
+    toggleComponentSourceFields();
+    renderComponentsTable();
+    renderBoxesTable();
+    updateStep1NextState();
+}
+
+function closeSetModal() {
+    const modal = document.getElementById('set-modal');
+    modal?.classList.add('hidden');
+}
+
+function resetBuilder() {
+    const existingRecipes = setState.builder.recipes || [];
+    setState.builder = {
+        step: 1,
+        setId: null,
+        name: '',
+        note: '',
+        components: [],
+        boxes: [],
+        containers: [],
+        recipes: existingRecipes,
+    };
+    switchStep(1);
+    const form = document.getElementById('set-form');
+    form?.reset();
+    document.getElementById('component-form')?.reset();
+    document.getElementById('box-form')?.reset();
+    const err = document.getElementById('set-modal-error');
+    if (err) {
+        err.classList.add('hidden');
+        err.textContent = '';
+    }
+}
+
+function toggleComponentSourceFields() {
+    const source = document.getElementById('component-source').value;
+    const recipeField = document.getElementById('component-recipe-field');
+    const freeField = document.getElementById('component-free-field');
+    if (source === 'RECIPE') {
+        recipeField.classList.remove('hidden');
+        freeField.classList.add('hidden');
+    } else {
+        recipeField.classList.add('hidden');
+        freeField.classList.remove('hidden');
+    }
+}
+
+function renderComponentsTable() {
+    const body = document.getElementById('components-body');
+    if (!body) return;
+    body.innerHTML = '';
+    if (!setState.builder.components.length) {
+        body.innerHTML = '<tr class="empty-row"><td colspan="5">Keine Komponenten hinzugefügt.</td></tr>';
+        return;
+    }
+
+    setState.builder.components.forEach((comp, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${comp.component_type}</td>
+            <td>${comp.source_type === 'RECIPE' ? 'Rezept #' + comp.recipe_id : comp.free_text}</td>
+            <td>${comp.amount_text || ''}</td>
+            <td>${comp.kcal_total ?? '-'}</td>
+            <td><button type="button" class="link" data-index="${idx}">Entfernen</button></td>
+        `;
+        tr.querySelector('button')?.addEventListener('click', () => {
+            setState.builder.components.splice(idx, 1);
+            renderComponentsTable();
+            renderComponentChecklist();
+            updateStep1NextState();
+        });
+        body.appendChild(tr);
+    });
+}
+
+function addComponentFromForm() {
+    const form = document.getElementById('component-form');
+    if (!form) return;
+    const data = new FormData(form);
+    const component = {
+        component_type: data.get('component_type'),
+        source_type: data.get('source_type'),
+        recipe_id: data.get('recipe_id'),
+        free_text: data.get('free_text'),
+        amount_text: data.get('amount_text'),
+        kcal_total: data.get('kcal_total'),
+    };
+
+    if (!component.component_type || !component.source_type) {
+        return;
+    }
+    if (component.source_type === 'RECIPE' && !component.recipe_id) {
+        return;
+    }
+    if (component.source_type === 'FREE' && !component.free_text) {
+        return;
+    }
+    if (component.source_type === 'FREE' && !component.kcal_total) {
+        return;
+    }
+
+    setState.builder.components.push(component);
+    renderComponentsTable();
+    renderComponentChecklist();
+    updateStep1NextState();
+    form.reset();
+    toggleComponentSourceFields();
+}
+
+async function submitSetStep1() {
+    const nameInput = document.querySelector('#set-form input[name="name"]');
+    const noteInput = document.querySelector('#set-form textarea[name="note"]');
+    if (!nameInput || !noteInput) return;
+    setState.builder.name = nameInput.value.trim();
+    setState.builder.note = noteInput.value.trim();
+    if (!isStep1Valid()) {
+        showSetModalError('Bitte Namen und mindestens eine Komponente angeben.');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/sets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: setState.builder.name,
+                note: setState.builder.note,
+                components: setState.builder.components,
+            }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.data) {
+            throw new Error(json.error?.code || 'save_failed');
+        }
+        setState.builder.setId = json.data.id;
+        setState.builder.components = json.data.components || [];
+        renderComponentsTable();
+        renderComponentChecklist();
+        await loadFreeContainers();
+        switchStep(2);
+    } catch (e) {
+        showSetModalError('Set konnte nicht gespeichert werden.');
+    }
+}
+
+function isStep1Valid() {
+    const nameInput = document.querySelector('#set-form input[name="name"]');
+    return !!(nameInput && nameInput.value.trim() && setState.builder.components.length);
+}
+
+function updateStep1NextState() {
+    const btn = document.getElementById('step1-next');
+    if (!btn) return;
+    btn.disabled = !isStep1Valid();
+}
+
+function switchStep(step) {
+    setState.builder.step = step;
+    document.querySelectorAll('.wizard-step').forEach((el) => el.classList.add('hidden'));
+    document.getElementById(`set-step-${step}`)?.classList.remove('hidden');
+    document.querySelectorAll('.wizard-steps .pill').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.stepTarget === String(step));
+    });
+}
+
+async function loadRecipesForSets() {
+    try {
+        const res = await fetch('/api/recipes?limit=200');
+        const json = await res.json();
+        setState.builder.recipes = json.data || [];
+        const select = document.getElementById('component-recipe');
+        if (select) {
+            select.innerHTML = '<option value="">Rezept wählen</option>';
+            setState.builder.recipes.forEach((r) => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.name;
+                select.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
+async function loadFreeContainers() {
+    try {
+        const res = await fetch('/api/containers?free=1&active=1');
+        const json = await res.json();
+        setState.builder.containers = json.items || [];
+        const select = document.getElementById('box-container');
+        if (select) {
+            select.innerHTML = '';
+            (json.items || []).forEach((c) => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = `${c.container_code || 'Container'}${c.note ? ' – ' + c.note : ''}`;
+                select.appendChild(opt);
+            });
+        }
+        const info = document.getElementById('free-container-count');
+        if (info) info.textContent = `${(json.items || []).length} frei`;
+    } catch (e) {
+        // ignore
+    }
+}
+
+function renderComponentChecklist() {
+    const container = document.getElementById('component-checklist');
+    if (!container) return;
+    container.innerHTML = '';
+    setState.builder.components.forEach((comp) => {
+        const label = document.createElement('label');
+        label.className = 'checkbox';
+        label.innerHTML = `<input type="checkbox" value="${comp.id || comp.tempId || ''}"> ${comp.component_type} – ${comp.source_type === 'RECIPE' ? 'Rezept #' + comp.recipe_id : comp.free_text}`;
+        container.appendChild(label);
+    });
+}
+
+function addBoxFromForm() {
+    const form = document.getElementById('box-form');
+    if (!form) return;
+    const data = new FormData(form);
+    const containerId = data.get('container_id');
+    const boxType = data.get('box_type');
+    const portionFactor = data.get('portion_factor');
+    const portionText = data.get('portion_text');
+    const componentIds = Array.from(form.querySelectorAll('#component-checklist input[type="checkbox"]:checked')).map((c) => parseInt(c.value, 10)).filter((v) => !Number.isNaN(v));
+
+    if (!containerId || !boxType || !componentIds.length) {
+        showSetModalError('Bitte Container, Typ und Komponenten wählen.');
+        return;
+    }
+
+    if (setState.builder.boxes.some((b) => String(b.container_id) === String(containerId))) {
+        showSetModalError('Container ist bereits zugewiesen.');
+        return;
+    }
+
+    if (!portionFactor && !portionText) {
+        showSetModalError('Portionen-Info fehlt.');
+        return;
+    }
+
+    setState.builder.boxes.push({
+        container_id: parseInt(containerId, 10),
+        box_type: boxType,
+        portion_factor: portionFactor || null,
+        portion_text: portionText || null,
+        component_ids: componentIds,
+    });
+    renderBoxesTable();
+    form.reset();
+    showSetModalError('');
+}
+
+function renderBoxesTable() {
+    const body = document.getElementById('boxes-body');
+    if (!body) return;
+    body.innerHTML = '';
+    if (!setState.builder.boxes.length) {
+        body.innerHTML = '<tr class="empty-row"><td colspan="5">Noch keine Boxen hinzugefügt.</td></tr>';
+        return;
+    }
+
+    setState.builder.boxes.forEach((box, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${box.box_type}</td>
+            <td>${box.container_id}</td>
+            <td>${box.portion_factor || '-'} / ${box.portion_text || '-'}</td>
+            <td>${box.component_ids.length}</td>
+            <td><button type="button" class="link" data-index="${idx}">Entfernen</button></td>
+        `;
+        tr.querySelector('button')?.addEventListener('click', () => {
+            setState.builder.boxes.splice(idx, 1);
+            renderBoxesTable();
+        });
+        body.appendChild(tr);
+    });
+}
+
+async function packSet() {
+    if (!setState.builder.setId) {
+        showSetModalError('Bitte zuerst das Set speichern.');
+        return;
+    }
+    if (!setState.builder.boxes.length) {
+        showSetModalError('Füge mindestens eine Box hinzu.');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/sets/${setState.builder.setId}/boxes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(setState.builder.boxes),
+        });
+        const json = await res.json();
+        if (!res.ok || json.error) {
+            throw new Error(json.error?.code || 'pack_failed');
+        }
+        closeSetModal();
+        loadSets();
+        alert('Set gepackt');
+    } catch (e) {
+        showSetModalError('Packen fehlgeschlagen.');
+    }
+}
+
+function showSetModalError(message) {
+    const el = document.getElementById('set-modal-error');
+    if (!el) return;
+    if (!message) {
+        el.classList.add('hidden');
+        el.textContent = '';
+    } else {
+        el.classList.remove('hidden');
+        el.textContent = message;
+    }
 }

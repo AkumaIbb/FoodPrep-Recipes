@@ -29,7 +29,7 @@ final class ContainerRepository
 
         $where = $conditions ? ('WHERE ' . implode(' AND ', $conditions)) : '';
 
-        $sql = "SELECT c.id, c.container_code, c.container_type_id, c.is_active, c.note,
+        $sql = "SELECT c.id, c.container_code, c.container_type_id, c.is_active, c.in_use, c.note,
                        ct.shape, ct.volume_ml, ct.material
                 FROM containers c
                 LEFT JOIN container_types ct ON ct.id = c.container_type_id
@@ -98,6 +98,52 @@ final class ContainerRepository
 
         $sql = 'UPDATE containers SET ' . implode(', ', $fields) . ', updated_at = NOW() WHERE id = :id';
         $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listFreeContainers(): array
+    {
+        $sql = "SELECT c.id, c.container_code, c.container_type_id, c.is_active, c.in_use, c.note,
+                       ct.shape, ct.volume_ml, ct.material
+                FROM containers c
+                LEFT JOIN container_types ct ON ct.id = c.container_type_id
+                WHERE c.is_active = 1 AND c.in_use = 0
+                ORDER BY c.container_code ASC";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * @param array<int> $containerIds
+     */
+    public function lockContainers(array $containerIds): void
+    {
+        if (empty($containerIds)) {
+            return;
+        }
+        $ids = array_values(array_unique(array_map('intval', $containerIds)));
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $this->pdo->prepare("SELECT id FROM containers WHERE id IN ({$placeholders}) FOR UPDATE");
+        $stmt->execute($ids);
+    }
+
+    /**
+     * @param array<int> $containerIds
+     */
+    public function setInUse(array $containerIds, bool $inUse): void
+    {
+        if (empty($containerIds)) {
+            return;
+        }
+        $ids = array_values(array_unique(array_map('intval', $containerIds)));
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $this->pdo->prepare("UPDATE containers SET in_use = ? WHERE id IN ({$placeholders})");
+        $params = array_merge([$inUse ? 1 : 0], $ids);
         $stmt->execute($params);
     }
 

@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS containers (
   container_code VARCHAR(32) NOT NULL,
   container_type_id SMALLINT UNSIGNED NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  in_use TINYINT(1) NOT NULL DEFAULT 0,
   note VARCHAR(200) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -256,6 +257,56 @@ CREATE TABLE IF NOT EXISTS id_counters (
 INSERT INTO id_counters (item_type, next_number) VALUES
   ('M',1),('P',1),('S',1),('B',1),('Z',1),('F',1),('D',1),('X',1)
 ON DUPLICATE KEY UPDATE next_number = next_number;
+
+-- =========================================================
+-- 9) Sets + Boxen (Meal-Prep-Builder)
+-- =========================================================
+CREATE TABLE IF NOT EXISTS sets (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(200) NOT NULL,
+  note TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS set_components (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  set_id BIGINT UNSIGNED NOT NULL,
+  component_type VARCHAR(20) NOT NULL,
+  source_type ENUM('RECIPE','FREE') NOT NULL,
+  recipe_id BIGINT UNSIGNED NULL,
+  free_text VARCHAR(255) NULL,
+  amount_text VARCHAR(100) NULL,
+  kcal_total INT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_set_components_set FOREIGN KEY (set_id) REFERENCES sets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS set_boxes (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  set_id BIGINT UNSIGNED NOT NULL,
+  container_id BIGINT UNSIGNED NOT NULL,
+  box_code VARCHAR(16) NOT NULL,
+  box_type VARCHAR(20) NOT NULL,
+  portion_factor DECIMAL(6,2) NULL,
+  portion_text VARCHAR(50) NULL,
+  kcal_total INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_set_boxes_set FOREIGN KEY (set_id) REFERENCES sets(id) ON DELETE CASCADE,
+  CONSTRAINT fk_set_boxes_container FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE RESTRICT,
+  CONSTRAINT uq_set_box_code UNIQUE (set_id, box_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS set_box_components (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  set_box_id BIGINT UNSIGNED NOT NULL,
+  set_component_id BIGINT UNSIGNED NOT NULL,
+  CONSTRAINT fk_sbc_box FOREIGN KEY (set_box_id) REFERENCES set_boxes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sbc_component FOREIGN KEY (set_component_id) REFERENCES set_components(id) ON DELETE RESTRICT,
+  CONSTRAINT uq_sbc UNIQUE (set_box_id, set_component_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
 

@@ -10,7 +10,9 @@ use App\Db;
 use App\InventoryRepository;
 use App\MealSetRepository;
 use App\RecipeRepository;
+use App\SetRepository;
 use App\Http\Api\RecipeController;
+use App\Http\Api\SetController;
 
 $pdo = Db::pdo();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -73,9 +75,15 @@ function handleApi(string $method, string $path, PDO $pdo): void
     $containerTypeRepo = new ContainerTypeRepository($pdo);
     $containerRepo = new ContainerRepository($pdo);
     $recipeRepo = new RecipeRepository($pdo);
+    $setRepo = new SetRepository($pdo);
     $recipeController = new RecipeController($recipeRepo);
+    $setController = new SetController($setRepo, $inventoryRepo, $containerRepo);
 
     if ($recipeController->handle($method, $path)) {
+        return;
+    }
+
+    if ($setController->handle($method, $path)) {
         return;
     }
 
@@ -179,10 +187,15 @@ function handleApi(string $method, string $path, PDO $pdo): void
 
     if ($method === 'GET' && $path === '/api/containers') {
         $active = (string)($_GET['active'] ?? '1');
+        $free = (string)($_GET['free'] ?? '');
         if (!in_array($active, ['1', '0', 'all'], true)) {
             $active = '1';
         }
-        $items = $containerRepo->listContainers($active);
+        if ($free === '1') {
+            $items = $containerRepo->listFreeContainers();
+        } else {
+            $items = $containerRepo->listContainers($active);
+        }
         jsonResponse(['ok' => true, 'items' => $items]);
         return;
     }
@@ -245,6 +258,8 @@ function renderPage(string $path): void
     $normalized = rtrim($path, '/') ?: '/';
     if ($normalized === '/recipes') {
         $page = 'recipes';
+    } elseif ($normalized === '/sets') {
+        $page = 'sets';
     } elseif (in_array($normalized, ['/containers', '/boxen', '/box-inventar'], true)) {
         $page = 'containers';
     } else {
@@ -267,6 +282,7 @@ function renderPage(string $path): void
             <div id="menu-drawer" class="menu-drawer hidden">
                 <a href="/">Inventar</a>
                 <a href="/containers">Box-Inventar</a>
+                <a href="/sets">Sets</a>
                 <a href="/recipes">Rezepte</a>
             </div>
         </div>
@@ -293,6 +309,164 @@ function renderPage(string $path): void
             <div id="modal-body"></div>
         </div>
     </div>
+    <?php elseif ($page === 'sets'): ?>
+    <main class="sets-page">
+        <h1>Sets</h1>
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2>Set-Builder</h2>
+                    <p class="sub">Komponenten planen und reale Boxen packen</p>
+                </div>
+                <div class="panel-actions">
+                    <button id="new-set-btn" class="primary-btn">Neues Set</button>
+                </div>
+            </div>
+            <div id="sets-error" class="error-banner hidden"></div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Notiz</th>
+                            <th>Aktualisiert</th>
+                            <th>Boxen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sets-body">
+                        <tr class="empty-row"><td colspan="4">Keine Sets vorhanden.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div id="set-modal" class="modal hidden" role="dialog" aria-modal="true">
+            <div class="modal-content wide">
+                <button id="set-modal-close" class="close">×</button>
+                <h2>Set bauen</h2>
+                <div id="set-modal-error" class="error-banner hidden"></div>
+                <div class="wizard-steps">
+                    <button type="button" class="pill active" data-step-target="1">1. Komponenten</button>
+                    <button type="button" class="pill" data-step-target="2">2. Boxen</button>
+                </div>
+
+                <div id="set-step-1" class="wizard-step">
+                    <form id="set-form" class="form-grid set-form-grid">
+                        <label class="wide">Name
+                            <input type="text" name="name" maxlength="200" required />
+                        </label>
+                        <label class="wide">Notiz
+                            <textarea name="note" rows="2" maxlength="500"></textarea>
+                        </label>
+                    </form>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Typ</th>
+                                    <th>Quelle</th>
+                                    <th>Menge</th>
+                                    <th>kcal gesamt</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="components-body">
+                                <tr class="empty-row"><td colspan="5">Keine Komponenten hinzugefügt.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <form id="component-form" class="component-form">
+                        <label>Typ
+                            <select name="component_type">
+                                <option value="MEAL">Meal</option>
+                                <option value="PROTEIN">Protein</option>
+                                <option value="SAUCE">Sauce</option>
+                                <option value="SIDE">Beilage</option>
+                                <option value="BASE">Base</option>
+                                <option value="BREAKFAST">Frühstück</option>
+                                <option value="DESSERT">Dessert</option>
+                                <option value="MISC">Misc</option>
+                            </select>
+                        </label>
+                        <label>Quelle
+                            <select name="source_type" id="component-source">
+                                <option value="RECIPE">Rezept</option>
+                                <option value="FREE">Freitext</option>
+                            </select>
+                        </label>
+                        <label id="component-recipe-field">Rezept
+                            <select name="recipe_id" id="component-recipe"></select>
+                        </label>
+                        <label id="component-free-field" class="hidden">Freitext
+                            <input type="text" name="free_text" maxlength="255" />
+                        </label>
+                        <label>Menge
+                            <input type="text" name="amount_text" maxlength="100" />
+                        </label>
+                        <label>Kcal gesamt
+                            <input type="number" name="kcal_total" min="0" />
+                        </label>
+                        <div class="wizard-actions">
+                            <button type="button" id="add-component-btn" class="secondary-btn">Komponente hinzufügen</button>
+                        </div>
+                    </form>
+                    <div class="wizard-actions">
+                        <button type="button" id="step1-next" class="primary-btn" disabled>Weiter</button>
+                    </div>
+                </div>
+
+                <div id="set-step-2" class="wizard-step hidden">
+                    <p>Freie Container: <span id="free-container-count">–</span></p>
+                    <form id="box-form" class="box-form-grid">
+                        <label>Container
+                            <select name="container_id" id="box-container"></select>
+                        </label>
+                        <label>Box-Typ
+                            <select name="box_type">
+                                <option value="PROTEIN">Protein</option>
+                                <option value="SIDE">Beilage</option>
+                                <option value="SAUCE">Sauce</option>
+                                <option value="BASE">Base</option>
+                                <option value="BREAKFAST">Frühstück</option>
+                                <option value="DESSERT">Dessert</option>
+                                <option value="MISC">Misc</option>
+                            </select>
+                        </label>
+                        <label>Portion-Faktor
+                            <input type="number" step="0.1" min="0" name="portion_factor" />
+                        </label>
+                        <label>Portion-Text
+                            <input type="text" name="portion_text" maxlength="50" />
+                        </label>
+                        <div class="checklist" id="component-checklist"></div>
+                        <div class="wizard-actions">
+                            <button type="button" id="add-box-btn" class="secondary-btn">Box hinzufügen</button>
+                        </div>
+                    </form>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Typ</th>
+                                    <th>Container</th>
+                                    <th>Portionen</th>
+                                    <th>Komponenten</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="boxes-body">
+                                <tr class="empty-row"><td colspan="5">Noch keine Boxen hinzugefügt.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="wizard-actions">
+                        <button type="button" id="back-to-components" class="secondary-btn">Zurück</button>
+                        <button type="button" id="pack-set-btn" class="primary-btn">Packen</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
     <?php elseif ($page === 'recipes'): ?>
     <main class="recipes-page">
         <h1>Rezepte</h1>
