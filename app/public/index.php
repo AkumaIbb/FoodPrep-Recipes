@@ -8,6 +8,7 @@ use App\ContainerRepository;
 use App\ContainerTypeRepository;
 use App\Db;
 use App\InventoryRepository;
+use App\ItemTypeDefaultRepository;
 use App\MealSetRepository;
 use App\RecipeRepository;
 use App\SetRepository;
@@ -74,6 +75,7 @@ function handleApi(string $method, string $path, PDO $pdo): void
     $inventoryRepo = new InventoryRepository($pdo);
     $containerTypeRepo = new ContainerTypeRepository($pdo);
     $containerRepo = new ContainerRepository($pdo);
+    $itemTypeRepo = new ItemTypeDefaultRepository($pdo);
     $recipeRepo = new RecipeRepository($pdo);
     $setRepo = new SetRepository($pdo);
     $recipeController = new RecipeController($recipeRepo);
@@ -170,6 +172,12 @@ function handleApi(string $method, string $path, PDO $pdo): void
 
     if ($method === 'GET' && $path === '/api/container-types') {
         $items = $containerTypeRepo->listTypes();
+        jsonResponse(['ok' => true, 'items' => $items]);
+        return;
+    }
+
+    if ($method === 'GET' && $path === '/api/item-type-defaults') {
+        $items = $itemTypeRepo->listDefaults();
         jsonResponse(['ok' => true, 'items' => $items]);
         return;
     }
@@ -422,15 +430,7 @@ function renderPage(string $path): void
                             <select name="container_id" id="box-container"></select>
                         </label>
                         <label>Box-Typ
-                            <select name="box_type">
-                                <option value="PROTEIN">Protein</option>
-                                <option value="SIDE">Beilage</option>
-                                <option value="SAUCE">Sauce</option>
-                                <option value="BASE">Base</option>
-                                <option value="BREAKFAST">Frühstück</option>
-                                <option value="DESSERT">Dessert</option>
-                                <option value="MISC">Misc</option>
-                            </select>
+                            <select name="box_type" id="box-type"></select>
                         </label>
                         <label>Portion-Faktor
                             <input type="number" step="0.1" min="0" name="portion_factor" />

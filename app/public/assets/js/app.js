@@ -33,7 +33,13 @@ const setState = {
         boxes: [],
         containers: [],
         recipes: [],
+        boxTypes: [],
     },
+};
+
+const componentFormState = {
+    kcalAutoValue: null,
+    kcalManuallyEdited: false,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -798,6 +804,10 @@ function bindSetModal() {
     });
 
     document.getElementById('component-source')?.addEventListener('change', toggleComponentSourceFields);
+    document.getElementById('component-recipe')?.addEventListener('change', handleRecipeSelection);
+    document.querySelector('#component-form input[name="kcal_total"]')?.addEventListener('input', () => {
+        componentFormState.kcalManuallyEdited = true;
+    });
     document.getElementById('add-component-btn')?.addEventListener('click', addComponentFromForm);
     document.getElementById('step1-next')?.addEventListener('click', submitSetStep1);
     document.getElementById('back-to-components')?.addEventListener('click', () => switchStep(1));
@@ -857,6 +867,7 @@ function openSetModal() {
     const modal = document.getElementById('set-modal');
     modal?.classList.remove('hidden');
     loadRecipesForSets();
+    loadItemTypeDefaults();
     toggleComponentSourceFields();
     renderComponentsTable();
     renderBoxesTable();
@@ -870,6 +881,7 @@ function closeSetModal() {
 
 function resetBuilder() {
     const existingRecipes = setState.builder.recipes || [];
+    const existingBoxTypes = setState.builder.boxTypes || [];
     setState.builder = {
         step: 1,
         setId: null,
@@ -879,17 +891,24 @@ function resetBuilder() {
         boxes: [],
         containers: [],
         recipes: existingRecipes,
+        boxTypes: existingBoxTypes,
     };
     switchStep(1);
     const form = document.getElementById('set-form');
     form?.reset();
     document.getElementById('component-form')?.reset();
     document.getElementById('box-form')?.reset();
+    resetComponentFormState();
     const err = document.getElementById('set-modal-error');
     if (err) {
         err.classList.add('hidden');
         err.textContent = '';
     }
+}
+
+function resetComponentFormState() {
+    componentFormState.kcalAutoValue = null;
+    componentFormState.kcalManuallyEdited = false;
 }
 
 function toggleComponentSourceFields() {
@@ -905,6 +924,54 @@ function toggleComponentSourceFields() {
     }
 }
 
+function getRecipeNameById(id) {
+    if (!id) return null;
+    const match = (setState.builder.recipes || []).find((r) => String(r.id) === String(id));
+    return match ? match.name : null;
+}
+
+function formatComponentSource(comp) {
+    if (comp.source_type === 'RECIPE') {
+        return comp.recipe_name || getRecipeNameById(comp.recipe_id) || (comp.recipe_id ? 'Rezept #' + comp.recipe_id : 'Rezept');
+    }
+    return comp.free_text;
+}
+
+function mapComponentsWithRecipeNames(components) {
+    return (components || []).map((comp) => ({
+        ...comp,
+        recipe_name: comp.recipe_name || getRecipeNameById(comp.recipe_id),
+    }));
+}
+
+function applyAutoKcalFromRecipe(recipe) {
+    const kcalInput = document.querySelector('#component-form input[name="kcal_total"]');
+    if (!kcalInput) return;
+
+    const autoValue = recipe && recipe.kcal_per_portion !== null ? recipe.kcal_per_portion : null;
+    const currentValue = kcalInput.value;
+    const previousAuto = componentFormState.kcalAutoValue;
+
+    const shouldOverwrite = !componentFormState.kcalManuallyEdited
+        || currentValue === ''
+        || currentValue === String(previousAuto ?? '');
+
+    if (shouldOverwrite) {
+        kcalInput.value = autoValue ?? '';
+        componentFormState.kcalManuallyEdited = false;
+    }
+
+    componentFormState.kcalAutoValue = autoValue;
+}
+
+function handleRecipeSelection() {
+    const select = document.getElementById('component-recipe');
+    if (!select) return;
+    const recipeId = select.value;
+    const recipe = (setState.builder.recipes || []).find((r) => String(r.id) === String(recipeId));
+    applyAutoKcalFromRecipe(recipe || null);
+}
+
 function renderComponentsTable() {
     const body = document.getElementById('components-body');
     if (!body) return;
@@ -918,7 +985,7 @@ function renderComponentsTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${comp.component_type}</td>
-            <td>${comp.source_type === 'RECIPE' ? 'Rezept #' + comp.recipe_id : comp.free_text}</td>
+            <td>${formatComponentSource(comp)}</td>
             <td>${comp.amount_text || ''}</td>
             <td>${comp.kcal_total ?? '-'}</td>
             <td><button type="button" class="link" data-index="${idx}">Entfernen</button></td>
@@ -941,10 +1008,15 @@ function addComponentFromForm() {
         component_type: data.get('component_type'),
         source_type: data.get('source_type'),
         recipe_id: data.get('recipe_id'),
+        recipe_name: null,
         free_text: data.get('free_text'),
         amount_text: data.get('amount_text'),
         kcal_total: data.get('kcal_total'),
     };
+
+    if (component.source_type === 'RECIPE' && component.recipe_id) {
+        component.recipe_name = getRecipeNameById(component.recipe_id);
+    }
 
     if (!component.component_type || !component.source_type) {
         return;
@@ -964,6 +1036,7 @@ function addComponentFromForm() {
     renderComponentChecklist();
     updateStep1NextState();
     form.reset();
+    resetComponentFormState();
     toggleComponentSourceFields();
 }
 
@@ -993,7 +1066,7 @@ async function submitSetStep1() {
             throw new Error(json.error?.code || 'save_failed');
         }
         setState.builder.setId = json.data.id;
-        setState.builder.components = json.data.components || [];
+        setState.builder.components = mapComponentsWithRecipeNames(json.data.components || []);
         renderComponentsTable();
         renderComponentChecklist();
         await loadFreeContainers();
@@ -1043,6 +1116,47 @@ async function loadRecipesForSets() {
     }
 }
 
+async function loadItemTypeDefaults() {
+    const select = document.getElementById('box-type');
+    if (!select) return;
+
+    const fallback = [
+        { value: 'PROTEIN', label: 'Protein' },
+        { value: 'SIDE', label: 'Beilage' },
+        { value: 'SAUCE', label: 'Sauce' },
+        { value: 'BASE', label: 'Base' },
+        { value: 'BREAKFAST', label: 'Frühstück' },
+        { value: 'DESSERT', label: 'Dessert' },
+        { value: 'MISC', label: 'Misc' },
+    ];
+
+    select.innerHTML = '<option value="">Box-Typ wählen</option>';
+
+    try {
+        const res = await fetch('/api/item-type-defaults');
+        const json = await res.json();
+        setState.builder.boxTypes = json.items || [];
+        if (!setState.builder.boxTypes.length) {
+            throw new Error('no_box_types');
+        }
+
+        setState.builder.boxTypes.forEach((it) => {
+            if (!it.box_type) return;
+            const opt = document.createElement('option');
+            opt.value = it.box_type;
+            opt.textContent = it.note || it.box_type;
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        fallback.forEach((it) => {
+            const opt = document.createElement('option');
+            opt.value = it.value;
+            opt.textContent = it.label;
+            select.appendChild(opt);
+        });
+    }
+}
+
 async function loadFreeContainers() {
     try {
         const res = await fetch('/api/containers?free=1&active=1');
@@ -1072,7 +1186,7 @@ function renderComponentChecklist() {
     setState.builder.components.forEach((comp) => {
         const label = document.createElement('label');
         label.className = 'checkbox';
-        label.innerHTML = `<input type="checkbox" value="${comp.id || comp.tempId || ''}"> ${comp.component_type} – ${comp.source_type === 'RECIPE' ? 'Rezept #' + comp.recipe_id : comp.free_text}`;
+        label.innerHTML = `<input type="checkbox" value="${comp.id || comp.tempId || ''}"> ${comp.component_type} – ${formatComponentSource(comp)}`;
         container.appendChild(label);
     });
 }
