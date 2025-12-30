@@ -12,6 +12,7 @@ use App\ItemTypeDefaultRepository;
 use App\MealSetRepository;
 use App\RecipeRepository;
 use App\SetRepository;
+use App\Http\Api\KcalEstimateController;
 use App\Http\Api\RecipeController;
 use App\Http\Api\SetController;
 use App\I18n;
@@ -81,10 +82,15 @@ function handleApi(string $method, string $path, PDO $pdo, I18n $i18n): void
     $itemTypeRepo = new ItemTypeDefaultRepository($pdo);
     $recipeRepo = new RecipeRepository($pdo);
     $setRepo = new SetRepository($pdo);
+    $kcalController = new KcalEstimateController();
     $recipeController = new RecipeController($recipeRepo, i18n: $i18n);
     $setController = new SetController($setRepo, $inventoryRepo, $containerRepo, $i18n);
 
     if ($recipeController->handle($method, $path)) {
+        return;
+    }
+
+    if ($kcalController->handle($method, $path)) {
         return;
     }
 

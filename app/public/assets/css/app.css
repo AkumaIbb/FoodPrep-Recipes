@@ -287,6 +287,11 @@ body {
     cursor: pointer;
 }
 
+.secondary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .checkbox {
     flex-direction: row;
     align-items: center;
