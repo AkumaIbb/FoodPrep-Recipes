@@ -1,6 +1,7 @@
 const page = document.body.dataset.page || 'inventory';
 const initialLocale = document.body.dataset.locale || 'de';
 const kcalEnabled = document.body.dataset.kcalEnabled === '1';
+const isDev = ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) || window.location.hostname.endsWith('.local');
 
 const LOCALE_STORAGE_KEY = 'locale';
 
@@ -51,7 +52,7 @@ const componentFormState = {
     kcalManuallyEdited: false,
 };
 
-const KCAL_ESTIMATE_STORAGE_KEY = 'kcal_estimate_last';
+const KCAL_ESTIMATE_STORAGE_KEY = 'kcal_estimate_last_ts';
 const KCAL_CLIENT_COOLDOWN_MS = 60 * 1000;
 const KCAL_DEBOUNCE_MS = 2000;
 let kcalCooldownTimer = null;
@@ -421,7 +422,7 @@ function bindRecipePage() {
     const modalClose = document.getElementById('recipe-modal-close');
     const form = document.getElementById('recipe-form');
     const kcalButton = document.getElementById('kcal-estimate');
-    const ingredientsField = form?.elements['ingredients_text'];
+    const ingredientsField = form?.querySelector('textarea[name="ingredients_text"]');
 
     if (search) {
         search.addEventListener('input', () => {
@@ -675,6 +676,27 @@ function setRecipeError(message, inModal = false) {
     }
 }
 
+function logDev(...args) {
+    if (isDev) {
+        console.debug(...args);
+    }
+}
+
+function parseKcalResponse(raw) {
+    if (raw === undefined || raw === null) return null;
+    const normalized = String(raw).trim().replace(/[–—]/g, '-');
+    const match = normalized.match(/^(\d{1,4})(?:\s*-\s*(\d{1,4}))?$/);
+    if (!match) return null;
+    const min = parseInt(match[1], 10);
+    const max = match[2] ? parseInt(match[2], 10) : min;
+    return {
+        raw: normalized,
+        min,
+        max,
+        best: Math.max(min, max),
+    };
+}
+
 async function estimateKcal() {
     const form = document.getElementById('recipe-form');
     const button = document.getElementById('kcal-estimate');
@@ -685,14 +707,21 @@ async function estimateKcal() {
         return;
     }
 
-    const ingredientsField = form.elements['ingredients_text'];
-    const yieldField = form.elements['yield_portions'];
-    const kcalField = form.elements['kcal_per_portion'];
+    const ingredientsField = form.querySelector('textarea[name="ingredients_text"]');
+    const yieldField = form.querySelector('input[name="yield_portions"]');
+    const kcalField = form.querySelector('input[name="kcal_per_portion"]');
     const ingredientsText = (ingredientsField?.value || '').toString().trim();
     const yieldPortions = toInt(yieldField?.value) || 1;
 
     if (!ingredientsText) {
         setRecipeError('Bitte Zutaten eintragen.', true);
+        return;
+    }
+
+    const cooldown = getLocalKcalCooldownRemaining();
+    if (cooldown > 0) {
+        showToast(t('recipes.kcal_estimate_wait_minute'));
+        updateKcalButtonState();
         return;
     }
 
@@ -710,6 +739,7 @@ async function estimateKcal() {
             body: JSON.stringify({ ingredients_text: ingredientsText, yield_portions: yieldPortions }),
         });
         const json = await res.json();
+        logDev('kcal estimate response', json);
         if (!res.ok || !json.ok) {
             throw {
                 code: json.error || 'estimate_failed',
@@ -717,8 +747,28 @@ async function estimateKcal() {
             };
         }
 
+        const rawEstimate = json.kcal_per_portion ?? json.response ?? json.raw ?? json.result ?? json.answer ?? null;
+        const parsed = typeof rawEstimate === 'number' ? {
+            raw: String(rawEstimate),
+            min: rawEstimate,
+            max: rawEstimate,
+            best: rawEstimate,
+        } : parseKcalResponse(rawEstimate);
+
+        if (!parsed) {
+            if (isDev) {
+                console.error('Kcal estimate could not be parsed', { raw: rawEstimate, payload: json });
+            }
+            throw { code: 'openai_invalid_response' };
+        }
+
         if (kcalField) {
-            kcalField.value = json.kcal_per_portion ?? '';
+            if (kcalField.type === 'number') {
+                kcalField.value = parsed.best ?? '';
+            } else {
+                kcalField.value = parsed.raw ?? '';
+            }
+            ['input', 'change'].forEach((eventName) => kcalField.dispatchEvent(new Event(eventName, { bubbles: true })));
         }
         showToast('Kalorien übernommen');
     } catch (err) {
@@ -768,7 +818,8 @@ function updateKcalButtonState() {
         return;
     }
 
-    const ingredientsText = (form.elements['ingredients_text']?.value || '').toString();
+    const ingredientsField = form.querySelector('textarea[name="ingredients_text"]');
+    const ingredientsText = (ingredientsField?.value || '').toString();
     const hasIngredients = ingredientsText.trim().length > 0;
     const cooldown = getLocalKcalCooldownRemaining();
     const shouldDisable = !hasIngredients || cooldown > 0;
