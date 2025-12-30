@@ -71,7 +71,7 @@
   "recipes.reheat": "Auftauen & Aufwärmen",
   "recipes.load_error": "Rezepte konnten nicht geladen werden.",
   "recipes.kcal_estimate": "Kalorien mit ChatGPT schätzen",
-  "recipes.kcal_estimate_soon": "Funktion folgt später.",
+  "recipes.kcal_estimate_soon": "Kalorien-Schätzung erfordert einen hinterlegten OpenAI API Key.",
 
   "sets.title": "Sets",
   "sets.builder.title": "Set-Builder",

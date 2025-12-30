@@ -71,7 +71,7 @@
   "recipes.reheat": "Defrost & Reheat",
   "recipes.load_error": "Recipes could not be loaded.",
   "recipes.kcal_estimate": "Estimate calories with ChatGPT",
-  "recipes.kcal_estimate_soon": "Feature coming soon.",
+  "recipes.kcal_estimate_soon": "Calorie estimate requires a configured OpenAI API key.",
 
   "sets.title": "Sets",
   "sets.builder.title": "Set builder",

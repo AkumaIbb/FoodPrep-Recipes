@@ -316,7 +316,7 @@ function renderPage(string $path, string $locale): void
     <title>Freezer Inventory</title>
     <link rel="stylesheet" href="/assets/css/app.css" />
 </head>
-<body data-page="<?= htmlspecialchars($page) ?>" data-locale="<?= htmlspecialchars($locale) ?>">
+<body data-page="<?= htmlspecialchars($page) ?>" data-locale="<?= htmlspecialchars($locale) ?>" data-kcal-enabled="<?= Config::env('OPENAI_API_KEY') ? '1' : '0' ?>">
     <header class="topbar">
         <div class="brand" data-i18n="nav.brand">Freezer Inventory</div>
         <div class="topbar-actions">

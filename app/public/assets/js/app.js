@@ -1,5 +1,6 @@
 const page = document.body.dataset.page || 'inventory';
 const initialLocale = document.body.dataset.locale || 'de';
+const kcalEnabled = document.body.dataset.kcalEnabled === '1';
 
 const LOCALE_STORAGE_KEY = 'locale';
 
@@ -477,15 +478,22 @@ function bindRecipePage() {
 
     if (kcalButton) {
         kcalButton.dataset.defaultLabel = kcalButton.textContent;
-        let debounce = false;
-        kcalButton.addEventListener('click', async () => {
-            if (debounce || kcalButton.disabled) return;
-            debounce = true;
-            setTimeout(() => {
-                debounce = false;
-            }, KCAL_DEBOUNCE_MS);
-            await estimateKcal();
-        });
+
+        if (!kcalEnabled) {
+            kcalButton.disabled = true;
+            kcalButton.textContent = t('recipes.kcal_estimate_soon');
+            setRecipeError(t('recipes.kcal_estimate_soon'), true);
+        } else {
+            let debounce = false;
+            kcalButton.addEventListener('click', async () => {
+                if (debounce || kcalButton.disabled) return;
+                debounce = true;
+                setTimeout(() => {
+                    debounce = false;
+                }, KCAL_DEBOUNCE_MS);
+                await estimateKcal();
+            });
+        }
     }
 
     if (ingredientsField) {
@@ -672,6 +680,11 @@ async function estimateKcal() {
     const button = document.getElementById('kcal-estimate');
     if (!form || !button) return;
 
+    if (!kcalEnabled) {
+        setRecipeError(t('recipes.kcal_estimate_soon'), true);
+        return;
+    }
+
     const ingredientsField = form.elements['ingredients_text'];
     const yieldField = form.elements['yield_portions'];
     const kcalField = form.elements['kcal_per_portion'];
@@ -737,6 +750,12 @@ function updateKcalButtonState() {
     const form = document.getElementById('recipe-form');
     const button = document.getElementById('kcal-estimate');
     if (!form || !button) return;
+
+    if (!kcalEnabled) {
+        button.disabled = true;
+        button.textContent = t('recipes.kcal_estimate_soon');
+        return;
+    }
 
     if (!button.dataset.defaultLabel) {
         button.dataset.defaultLabel = button.textContent;
