@@ -196,8 +196,8 @@ function renderItemCards(items) {
         card.className = 'card';
         const bestBefore = item.computed_best_before ? item.computed_best_before.substring(0, 10) : '-';
         card.innerHTML = `
-            <div class="card-title">${item.name} (${item.item_type})</div>
-            <div class="meta">ID ${item.id_code}</div>
+            <div class="card-title">${item.name}</div>
+            <div class="meta">ID ${item.id_code} · Typ ${item.item_type}</div>
             <div class="flags">${item.is_veggie ? '🥕' : ''} ${item.is_vegan ? '🌱' : ''}</div>
             <div class="fifo">Frosten: ${item.frozen_at} · MHD: ${bestBefore}</div>
         `;
