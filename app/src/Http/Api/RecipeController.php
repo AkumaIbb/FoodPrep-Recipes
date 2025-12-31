@@ -33,6 +33,11 @@ final class RecipeController
             return true;
         }
 
+        if ($method === 'DELETE' && preg_match('#^/api/recipes/(\d+)$#', $path, $m)) {
+            $this->delete((int)$m[1]);
+            return true;
+        }
+
         return false;
     }
 
@@ -84,6 +89,16 @@ final class RecipeController
             $code = $e->getMessage();
             $status = $code === 'duplicate_name' ? 409 : 422;
             $this->error($code, $status);
+        }
+    }
+
+    private function delete(int $id): void
+    {
+        try {
+            $this->recipes->delete($id);
+            $this->json(['ok' => true], 200);
+        } catch (RuntimeException $e) {
+            $this->error($e->getMessage(), $e->getMessage() === 'not_found' ? 404 : 422);
         }
     }
 

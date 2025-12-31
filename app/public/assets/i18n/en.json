@@ -17,6 +17,10 @@
   "common.optional": "-- optional --",
   "common.choose": "-- choose --",
   "common.all": "All",
+  "common.actions": "Actions",
+  "common.edit": "Edit",
+  "common.delete": "Delete",
+  "common.deleted": "Deleted",
 
   "nav.brand": "Freezer Inventory",
   "nav.language_label": "Language",
@@ -78,6 +82,8 @@
   "recipes.kcal_estimate": "Estimate calories with ChatGPT",
   "recipes.kcal_estimate_soon": "Calorie estimate requires a configured OpenAI API key.",
   "recipes.kcal_estimate_wait_minute": "Please wait 1 minute",
+  "recipes.delete_confirm": "Delete this recipe?",
+  "recipes.delete_failed": "Recipe could not be deleted.",
 
   "sets.title": "Sets",
   "sets.builder.title": "Set builder",
@@ -146,6 +152,8 @@
   "containers.material.plastic": "Plastic",
   "containers.material.glass": "Glass",
   "containers.types.new": "New type",
+  "containers.types.delete_confirm": "Delete this container type? Linked boxes will keep their assignments.",
+  "containers.types.delete_failed": "Container type could not be deleted.",
   "containers.list.title": "Containers",
   "containers.list.subtitle": "Active boxes and type mapping",
   "containers.filter.active": "Active",
@@ -158,5 +166,7 @@
   "containers.status.inactive": "Inactive",
   "containers.actions.deactivate": "Deactivate",
   "containers.actions.reactivate": "Reactivate",
-  "containers.actions.toggle_failed": "Status could not be changed."
+  "containers.actions.toggle_failed": "Status could not be changed.",
+  "containers.delete_confirm": "Delete this container? Any box assignment will be removed.",
+  "containers.delete_failed": "Container could not be deleted."
 }

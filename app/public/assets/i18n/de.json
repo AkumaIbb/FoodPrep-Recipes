@@ -17,6 +17,10 @@
   "common.optional": "-- optional --",
   "common.choose": "-- wählen --",
   "common.all": "Alle",
+  "common.actions": "Aktionen",
+  "common.edit": "Bearbeiten",
+  "common.delete": "Löschen",
+  "common.deleted": "Gelöscht",
 
   "nav.brand": "Freezer Inventory",
   "nav.language_label": "Sprache",
@@ -78,6 +82,8 @@
   "recipes.kcal_estimate": "Kalorien mit ChatGPT schätzen",
   "recipes.kcal_estimate_soon": "Kalorien-Schätzung erfordert einen hinterlegten OpenAI API Key.",
   "recipes.kcal_estimate_wait_minute": "Bitte 1 Minute warten",
+  "recipes.delete_confirm": "Rezept wirklich löschen?",
+  "recipes.delete_failed": "Rezept konnte nicht gelöscht werden.",
 
   "sets.title": "Sets",
   "sets.builder.title": "Set-Builder",
@@ -146,6 +152,8 @@
   "containers.material.plastic": "Plastic",
   "containers.material.glass": "Glass",
   "containers.types.new": "Neuer Typ",
+  "containers.types.delete_confirm": "Diesen Container-Typ löschen? Zugeordnete Boxen werden nicht entfernt.",
+  "containers.types.delete_failed": "Container-Typ konnte nicht gelöscht werden.",
   "containers.list.title": "Container",
   "containers.list.subtitle": "Aktive Boxen und Zuordnung zu Typen",
   "containers.filter.active": "Aktiv",
@@ -158,5 +166,7 @@
   "containers.status.inactive": "Inaktiv",
   "containers.actions.deactivate": "Deaktivieren",
   "containers.actions.reactivate": "Reaktivieren",
-  "containers.actions.toggle_failed": "Status konnte nicht geändert werden."
+  "containers.actions.toggle_failed": "Status konnte nicht geändert werden.",
+  "containers.delete_confirm": "Container wirklich löschen? Er kann Box-Zuordnungen verlieren.",
+  "containers.delete_failed": "Container konnte nicht gelöscht werden."
 }

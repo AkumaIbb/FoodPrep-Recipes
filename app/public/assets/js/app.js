@@ -516,7 +516,7 @@ async function loadRecipes() {
     const tbody = document.getElementById('recipes-body');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="6" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
     setRecipeError('');
 
     try {
@@ -537,7 +537,7 @@ async function loadRecipes() {
     } catch (err) {
         console.error(err);
         setRecipeError(t('recipes.load_error'));
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="6" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="7" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
     }
 }
 
@@ -547,7 +547,7 @@ function renderRecipes(items) {
 
     tbody.innerHTML = '';
     if (!items.length) {
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="6" data-i18n="recipes.empty">${t('recipes.empty')}</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="7" data-i18n="recipes.empty">${t('recipes.empty')}</td></tr>`;
         return;
     }
 
@@ -560,8 +560,21 @@ function renderRecipes(items) {
             <td>${item.yield_portions ?? '-'}</td>
             <td>${item.kcal_per_portion ?? '-'}</td>
             <td>${formatDate(item.updated_at || item.created_at)}</td>
+            <td class="actions">
+                <button type="button" data-action="edit">${t('common.edit')}</button>
+                <button type="button" data-action="delete">${t('common.delete')}</button>
+            </td>
         `;
-        tr.addEventListener('click', () => openRecipeModal(item));
+        const editBtn = tr.querySelector('button[data-action="edit"]');
+        const deleteBtn = tr.querySelector('button[data-action="delete"]');
+        editBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openRecipeModal(item);
+        });
+        deleteBtn?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await deleteRecipe(item.id);
+        });
         tbody.appendChild(tr);
     });
 }
@@ -613,6 +626,21 @@ function closeRecipeModal() {
         modal.classList.add('hidden');
     }
     recipeState.editingId = null;
+}
+
+async function deleteRecipe(id) {
+    if (!confirm(t('recipes.delete_confirm'))) return;
+    try {
+        const res = await fetch(`/api/recipes/${id}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error?.message || 'delete_failed');
+        closeRecipeModal();
+        showToast(t('common.deleted'));
+        await loadRecipes();
+    } catch (err) {
+        console.error(err);
+        setRecipeError(t('recipes.delete_failed'));
+    }
 }
 
 async function saveRecipe() {
@@ -968,14 +996,14 @@ function buildContainerPayload(formData) {
 async function loadContainerTypes() {
     const tbody = document.getElementById('container-types-body');
     if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="5" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
     try {
         const items = await fetchContainerTypes();
         containerState.types = items;
         renderContainerTypes(items);
         populateContainerTypeSelect(items);
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" class="error" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="error" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
         console.error(err);
     }
 }
@@ -985,7 +1013,7 @@ function renderContainerTypes(items) {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (!items.length) {
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="5" data-i18n="containers.types.empty">${t('containers.types.empty')}</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="6" data-i18n="containers.types.empty">${t('containers.types.empty')}</td></tr>`;
         return;
     }
 
@@ -998,7 +1026,13 @@ function renderContainerTypes(items) {
             <td>${dims || '-'}</td>
             <td>${item.material || '-'}</td>
             <td>${item.note || ''}</td>
+            <td class="actions">
+                <button type="button" data-action="delete">${t('common.delete')}</button>
+            </td>
         `;
+        tr.querySelector('button[data-action="delete"]')?.addEventListener('click', async () => {
+            await deleteContainerType(item.id);
+        });
         tbody.appendChild(tr);
     });
 }
@@ -1022,12 +1056,12 @@ function populateContainerTypeSelect(items) {
 async function loadContainers() {
     const tbody = document.getElementById('containers-body');
     if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="7" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="loading" data-i18n="common.loading">${t('common.loading')}</td></tr>`;
     try {
         const items = await fetchContainers(containerState.active);
         renderContainers(items);
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" class="error" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="error" data-i18n="common.error_loading">${t('common.error_loading')}</td></tr>`;
         console.error(err);
     }
 }
@@ -1037,7 +1071,7 @@ function renderContainers(items) {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (!items.length) {
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="7" data-i18n="containers.list.empty">${t('containers.list.empty')}</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="8" data-i18n="containers.list.empty">${t('containers.list.empty')}</td></tr>`;
         return;
     }
 
@@ -1053,20 +1087,28 @@ function renderContainers(items) {
             <td>${item.material || '-'}</td>
             <td>${status}</td>
             <td>${item.note || ''}</td>
-            <td><button data-action="toggle" data-id="${item.id}" data-active="${item.is_active ? 1 : 0}">${buttonLabel}</button></td>
+            <td class="actions">
+                <button data-action="toggle" data-id="${item.id}" data-active="${item.is_active ? 1 : 0}">${buttonLabel}</button>
+                <button data-action="delete" data-id="${item.id}">${t('common.delete')}</button>
+            </td>
         `;
-        const btn = tr.querySelector('button[data-action="toggle"]');
-        btn.addEventListener('click', async () => {
-            btn.disabled = true;
+        const toggleBtn = tr.querySelector('button[data-action="toggle"]');
+        toggleBtn?.addEventListener('click', async () => {
+            toggleBtn.disabled = true;
             try {
                 await updateContainer(item.id, { is_active: item.is_active ? 0 : 1 });
                 await loadContainers();
             } catch (err) {
                 alert(t('containers.actions.toggle_failed'));
                 console.error(err);
-                btn.disabled = false;
+                toggleBtn.disabled = false;
             }
         });
+
+        tr.querySelector('button[data-action="delete"]')?.addEventListener('click', async () => {
+            await deleteContainer(item.id);
+        });
+
         tbody.appendChild(tr);
     });
 }
@@ -1107,6 +1149,39 @@ async function updateContainer(id, payload) {
     const json = await res.json();
     if (!res.ok || json.error) {
         throw new Error(json.error || 'request_failed');
+    }
+}
+
+async function deleteContainerType(id) {
+    if (!confirm(t('containers.types.delete_confirm'))) return;
+    try {
+        const res = await fetch(`/api/container-types/${id}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (!res.ok || json.error) {
+            throw new Error(json.error || 'request_failed');
+        }
+        showToast(t('common.deleted'));
+        await loadContainerTypes();
+        await loadContainers();
+    } catch (err) {
+        console.error(err);
+        alert(t('containers.types.delete_failed'));
+    }
+}
+
+async function deleteContainer(id) {
+    if (!confirm(t('containers.delete_confirm'))) return;
+    try {
+        const res = await fetch(`/api/containers/${id}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (!res.ok || json.error) {
+            throw new Error(json.error || 'request_failed');
+        }
+        showToast(t('common.deleted'));
+        await loadContainers();
+    } catch (err) {
+        console.error(err);
+        alert(t('containers.delete_failed'));
     }
 }
 

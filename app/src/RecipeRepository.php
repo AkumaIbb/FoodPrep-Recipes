@@ -153,6 +153,15 @@ final class RecipeRepository
         return $row ? $row : null;
     }
 
+    public function delete(int $id): void
+    {
+        $stmt = $this->pdo->prepare('DELETE FROM recipes WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        if ($stmt->rowCount() === 0) {
+            throw new RuntimeException('not_found');
+        }
+    }
+
     private function requireName(string $name): string
     {
         $trimmed = trim($name);
