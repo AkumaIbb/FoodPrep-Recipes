@@ -140,6 +140,7 @@
   "containers.columns.status": "Status",
   "containers.types.empty": "Keine Typen erfasst.",
   "containers.shapes.rect": "Rechteck",
+  "containers.shapes.square": "Quadratisch",
   "containers.shapes.round": "Rund",
   "containers.shapes.oval": "Oval",
   "containers.material.plastic": "Plastic",
