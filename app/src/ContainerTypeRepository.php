@@ -9,7 +9,7 @@ use RuntimeException;
 
 final class ContainerTypeRepository
 {
-    private const SHAPES = ['RECT', 'ROUND', 'OVAL'];
+    private const SHAPES = ['RECT', 'SQUERE', 'ROUND', 'OVAL'];
     private const MATERIALS = ['PLASTIC', 'GLASS'];
 
     public function __construct(private PDO $pdo)
