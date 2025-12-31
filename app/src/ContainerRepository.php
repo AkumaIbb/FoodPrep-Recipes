@@ -172,6 +172,15 @@ final class ContainerRepository
         $stmt->execute($params);
     }
 
+    public function delete(int $id): void
+    {
+        $stmt = $this->pdo->prepare('DELETE FROM containers WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        if ($stmt->rowCount() === 0) {
+            throw new RuntimeException('not_found');
+        }
+    }
+
     private function optionalInt(null|int|string $value): ?int
     {
         if ($value === null || $value === '') {

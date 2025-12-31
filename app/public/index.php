@@ -202,6 +202,17 @@ function handleApi(string $method, string $path, PDO $pdo, I18n $i18n): void
         return;
     }
 
+    if ($method === 'DELETE' && preg_match('#^/api/container-types/(\d+)$#', $path, $m)) {
+        try {
+            $containerTypeRepo->delete((int)$m[1]);
+            jsonResponse(['ok' => true]);
+        } catch (RuntimeException $e) {
+            $status = $e->getMessage() === 'not_found' ? 404 : 422;
+            jsonResponse(['error' => $e->getMessage()], $status);
+        }
+        return;
+    }
+
     if ($method === 'GET' && $path === '/api/containers') {
         $active = (string)($_GET['active'] ?? '1');
         $free = (string)($_GET['free'] ?? '');
@@ -236,6 +247,17 @@ function handleApi(string $method, string $path, PDO $pdo, I18n $i18n): void
             jsonResponse(['ok' => true]);
         } catch (RuntimeException $e) {
             jsonResponse(['error' => $e->getMessage()], 422);
+        }
+        return;
+    }
+
+    if ($method === 'DELETE' && preg_match('#^/api/containers/(\d+)$#', $path, $m)) {
+        try {
+            $containerRepo->delete((int)$m[1]);
+            jsonResponse(['ok' => true]);
+        } catch (RuntimeException $e) {
+            $status = $e->getMessage() === 'not_found' ? 404 : 422;
+            jsonResponse(['error' => $e->getMessage()], $status);
         }
         return;
     }
@@ -564,10 +586,11 @@ function renderPage(string $path, string $locale): void
                             <th data-i18n="recipes.portions">Portionen</th>
                             <th data-i18n="recipes.kcal">kcal/Portion</th>
                             <th data-i18n="common.updated">Aktualisiert</th>
+                            <th data-i18n="common.actions">Aktionen</th>
                         </tr>
                     </thead>
                     <tbody id="recipes-body">
-                        <tr class="empty-row"><td colspan="6" data-i18n="recipes.empty">Keine Rezepte vorhanden.</td></tr>
+                        <tr class="empty-row"><td colspan="7" data-i18n="recipes.empty">Keine Rezepte vorhanden.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -654,10 +677,11 @@ function renderPage(string $path, string $locale): void
                             <th data-i18n="containers.columns.dimensions">Maße (mm)</th>
                             <th data-i18n="containers.columns.material">Material</th>
                             <th data-i18n="common.note">Notiz</th>
+                            <th data-i18n="common.actions">Aktionen</th>
                         </tr>
                     </thead>
                     <tbody id="container-types-body">
-                        <tr class="empty-row"><td colspan="5" data-i18n="containers.types.empty">Keine Typen erfasst.</td></tr>
+                        <tr class="empty-row"><td colspan="6" data-i18n="containers.types.empty">Keine Typen erfasst.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -725,11 +749,11 @@ function renderPage(string $path, string $locale): void
                             <th data-i18n="containers.columns.material">Material</th>
                             <th data-i18n="containers.columns.status">Status</th>
                             <th data-i18n="common.note">Notiz</th>
-                            <th></th>
+                            <th data-i18n="common.actions">Aktionen</th>
                         </tr>
                     </thead>
                     <tbody id="containers-body">
-                        <tr class="empty-row"><td colspan="7" data-i18n="containers.list.empty">Keine Container angelegt.</td></tr>
+                        <tr class="empty-row"><td colspan="8" data-i18n="containers.list.empty">Keine Container angelegt.</td></tr>
                     </tbody>
                 </table>
             </div>
