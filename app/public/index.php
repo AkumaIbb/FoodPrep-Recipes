@@ -667,6 +667,7 @@ function renderPage(string $path, string $locale): void
                         <select name="shape" required>
                             <option value="" data-i18n="common.choose">-- wählen --</option>
                             <option value="RECT" data-i18n="containers.shapes.rect">Rechteck</option>
+                            <option value="SQUARE" data-i18n="containers.shapes.square">Quadratisch</option>
                             <option value="ROUND" data-i18n="containers.shapes.round">Rund</option>
                             <option value="OVAL" data-i18n="containers.shapes.oval">Oval</option>
                         </select>
