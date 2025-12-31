@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS recipes (
 -- =========================================================
 CREATE TABLE IF NOT EXISTS container_types (
   id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  shape ENUM('RECT','ROUND','OVAL') NOT NULL,
+  shape ENUM('RECT','SQUARE','ROUND','OVAL') NOT NULL,
   volume_ml SMALLINT UNSIGNED NOT NULL,
   height_mm SMALLINT UNSIGNED NULL,
   width_mm SMALLINT UNSIGNED NULL,
